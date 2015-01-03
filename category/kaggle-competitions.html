@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Alex Minnaar's Blog - Machine Learning, Data Science and Software Engineering - Kaggle-Competitions</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory  </a><br /><br />
+          </div>
+
+</div>
+
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-7.html">Facebook Recruiting III Keyword Extraction - Part 7</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-11-24T00:00:00+01:00">
+          on&nbsp;Sun 24 November 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Parameter Tuning</h2>
+<p>Now the time has come to perform an actual out-of-sample test of our association rule algorithm.  The training data set has about 6 million rows so the association rule algorithm will be trained on 5 million rows and the remaining 1 million rows will be held out for testing.  From this we can accomplish two goals</p>
+<p>It gives us an idea of how well our algorithm will perform on the actual test set without actually having to submit anything on the Kaggle website (you are only allowed 2 submissions per day).
+It allows us to tune the parameters of our algorithm to achieve the best performance on our hold-out data set.
+However, before we start tuning parameters we should first formalize our classification algorithm.</p>
+<h3>Classification Algorithm</h3>
+<p>The classification algorithm is fairly simple.  The following pseudo-code illustrates how it works</p>
+<div class="highlight"><pre>I={}
+For r in AR:
+     if C(r)&gt;α AND supp(r)&gt;β AND r not in I:
+          I.append(r)
+</pre></div>
+
+
+<p>The input to the algorithm is the learned association rules from both the post title and post body <span class="math">\(AR\)</span>.  <span class="math">\(I\)</span> denotes the set of tags that will be predicted for the given post, so initially <span class="math">\(I\)</span> is empty.  The algorithm searches through <span class="math">\(AR\)</span> to find association rules <span class="math">\(r\)</span> with confidence above a certain threshold <span class="math">\(\alpha\)</span> and support above a certain threshold <span class="math">\(\beta\)</span>.  The tags in these association rules are then added to the set <span class="math">\(I\)</span> which become the predicted tags for this post.</p>
+<p>So we need to find the optimal parameters <span class="math">\(\alpha\)</span> and <span class="math">\(\beta\)</span>.  One way to do this is to vary these parameters and see how their values affect the test error.  The parameter values that produce the best test performance are the ones we would use.  Before we can do this, we must decide on a loss function.  Kaggle says that the loss function that submissions are scored upon is the mean F1-score loss function.  The mean F1-score loss function is defined as</p>
+<p><span class="math">\(F1=2\frac{p \cdot r}{p+r}\)</span> where <span class="math">\(p=\frac{tp}{tp+fp}\)</span> and <span class="math">\(r=\frac{tp}{tp+fn}\)</span></p>
+<p>This loss function means that both precision (<span class="math">\(p\)</span>) and recall (<span class="math">\(r\)</span>) are weighted equally so both must be optimized in order to obtain the best score. The F1-score can be written in Python code as the following</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">F1_score</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span><span class="n">predicted</span><span class="p">):</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+    <span class="n">predicted</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span>
+    <span class="n">tp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span> <span class="o">&amp;</span> <span class="n">predicted</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
+    <span class="n">fn</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
+
+    <span class="k">if</span> <span class="n">tp</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+        <span class="n">precision</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fp</span><span class="p">)</span>
+        <span class="n">recall</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fn</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="mi">2</span><span class="o">*</span><span class="p">((</span><span class="n">precision</span><span class="o">*</span><span class="n">recall</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">precision</span><span class="o">+</span><span class="n">recall</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+</pre></div>
+
+
+<p>predicted is the list of tags that the classification algorithm predicts for a given post in the hold-out set and tags is the list of actual tags for that post.  These lists are then converted to Python sets so that tp, fp, and fn can be computed efficiently.</p>
+<h3>Varying the Parameters</h3>
+<p>Now that we have a cost function, we can run some tests to calibrate our parameters α and β.  As stated earlier, we split the data set into a training set and test set - mine association rules from the training set and test their performance on the test set.</p>
+<h3>Why not use cross-validation?</h3>
+<p>Usually one should use k-fold cross-validation to learn the optimal parameter values as it would give the most unbiased representation of the algorithm's performance on unseen data.  However, 5-fold cross-validation was tried initially but it became clear that validation errors for each of the 5 validation sets were very similar so taking the average would not be much different than the error of one of the validation sets.  For this reason (and the fact that each test will take 1/5th of the time), a single test set was used instead.</p>
+<h2>Results</h2>
+<p>After considering many combinations of support and confidence values, the best F1-score was found to be <strong>0.74021</strong> with confidence=0.5 and support=5.  The number 1 score was 0.81350 so I was not too far off.</p>
+<p>There were many different strategies that I wanted to try but did not have time to implement.  Here is a list of improvements/alternative strategies that I would have liked to try if I had enough time.</p>
+<ul>
+<li>About 50,000 posts in the test set were predicted to have zero tags because there were no association rules for them that fell within the acceptable threshold.  These posts were scored as zero.  However, F1-score can never be negative so any random guess of tags could only improve the score.  A naive solution would be to simply use the baseline tags (i.e. javascript c# python php java) as predictions for these posts, however I suspect that there would be a more clever way of doing this.</li>
+<li>The opposite problem also occurs in some predictions.  Some posts are predicted to have 8, 9, 10+ tags.  Given what we know from the training set and this kaggle thread, the maximum number of tags is 5 (and it is also quite rare to have that many).  This does not necessarily mean that we should cut off all predictions at 5 tags, but certainly 10+ tags is not a sensible number of tags to predict.  So I think that is very likely that our score would increase if we reduced the number of tags in these cases.</li>
+<li>I considered each post as a bag-of-words - meaning that I only cared which words appeared in the post, not their ordering.  However, I suspect that if I was able to build bigram-based association rules, I could increase the classifier performance.  For example, if a post title contains the bigram "linux server", my current classifier would look at the association rules for "linux" and "server" independently and it might be unlikely that it would predict the tag "linux-server" for either of those terms.  However, I suspect that a bigram association rule between "linux server" and "linux-server" would be much more likely.  The trade-off is that it would be much more difficult to mine bigram association rules on a single computer in terms of memory capacity.</li>
+<li>Another strategy would be to abandon the association rule classification strategy altogether and consider a more classical method.  One such method would be to create a very sparse binary valued matrix from the training set where each feature is a word that could appear in a post (assign it a value of 1 if it does, 0 if is doesn't).  Then use well-known classification methods to model the relationship between the input matrix and the output tags.  However, I would imagine that this could present problems due to the size and sparsity of this matrix.</li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-6.html">Facebook Recruiting III Keyword Extraction - Part 6</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-10-27T00:00:00+02:00">
+          on&nbsp;Sun 27 October 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Test Examples</h2>
+<p>In this post we will be testing the association rule algorithm on a few posts from the training set.  Usually it is bad practice to test on your training set but this is just for illustrative purposes (since the training set is so large and we are only testing on a few examples, it should not make a significant difference anyway).</p>
+<h3>Example 1:</h3>
+<p><strong>Title:</strong> php script to echo a post</p>
+<p><strong>Body:</strong></p>
+<div class="highlight"><pre><span class="nt">&lt;p&gt;</span>Could someone help with a simple PHP script to echo the whole message received with an HTTPPOST.<span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>I am sending a string from an android app using HTTPPOST and would like to receive as a response the message received by the POST at the server.<span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>The script that I am using will only echo name value pairs <span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;pre&gt;&lt;code&gt;</span>echo $_POST(&#39;data&#39;) <span class="nt">&lt;/code&gt;&lt;/pre&gt;</span> <span class="nt">&lt;p&gt;</span>works when I post form data, but have not figured out how to echo a string. <span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>Thanks<span class="nt">&lt;/p&gt;</span>
+</pre></div>
+
+
+<p><strong>Tags:</strong> php android</p>
+<p>The most likely association rules for the post title are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>php</td>
+<td>php</td>
+<td>158454</td>
+<td>0.9415</td>
+</tr>
+<tr>
+<td>echo</td>
+<td>php</td>
+<td>2237</td>
+<td>0.6268</td>
+</tr>
+<tr>
+<td>echo</td>
+<td>echo</td>
+<td>820</td>
+<td>0.2298</td>
+</tr>
+<tr>
+<td>post</td>
+<td>php</td>
+<td>7042</td>
+<td>0.1817</td>
+</tr>
+<tr>
+<td>script</td>
+<td>php</td>
+<td>8652</td>
+<td>0.1631</td>
+</tr>
+<tr>
+<td>post</td>
+<td>post</td>
+<td>6124</td>
+<td>0.1579</td>
+</tr>
+<tr>
+<td>script</td>
+<td>javascript</td>
+<td>6657</td>
+<td>0.1255</td>
+</tr>
+<tr>
+<td>script</td>
+<td>bash</td>
+<td>6642</td>
+<td>0.1233</td>
+</tr>
+</tbody>
+</table>
+<p>As you can see, the most likely association rule is <span class="math">\(php \rightarrow php\)</span>.  This is good since "php" is indeed a tag for this post.  The other tag for this post is "android" however there are no association rules listed that correspond to this tag.  This is not necessarily bad news because the title "php script to echo a post" does not even suggest that this post relates to "android" at all.  Perhaps the android-related content is in the post body...</p>
+<p>The most likely association rules for the post body are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>android</td>
+<td>android</td>
+<td>200854</td>
+<td>0.8938</td>
+</tr>
+<tr>
+<td>php</td>
+<td>php</td>
+<td>290432</td>
+<td>0.7563</td>
+</tr>
+<tr>
+<td>echo</td>
+<td>php</td>
+<td>13577</td>
+<td>0.5538</td>
+</tr>
+<tr>
+<td>httppost</td>
+<td>android</td>
+<td>588</td>
+<td>0.4273</td>
+</tr>
+<tr>
+<td>httppost</td>
+<td>asp.net-mvc</td>
+<td>272</td>
+<td>0.1977</td>
+</tr>
+<tr>
+<td>app</td>
+<td>android</td>
+<td>128830</td>
+<td>0.1933</td>
+</tr>
+<tr>
+<td>script</td>
+<td>php</td>
+<td>73170</td>
+<td>0.1926</td>
+</tr>
+<tr>
+<td>httppost</td>
+<td>java</td>
+<td>217</td>
+<td>0.1577</td>
+</tr>
+</tbody>
+</table>
+<p>As suspected, the android-related content was in the post body as shown by the most likely association rule <span class="math">\(android \rightarrow android\)</span>.  So the two most likely association rules correspond to the correct tags of "php" and "android" with probabilities 0.9415 and 0.8938 respectively.  The most likely incorrect tag is "echo" with probability 0.2298.</p>
+<h3>Example 2:</h3>
+<p><strong>Title:</strong> Can output of a method be used to autowire another bean?</p>
+<p><strong>Body:</strong></p>
+<div class="highlight"><pre><span class="nt">&lt;p&gt;</span>I have a following class <span class="nt">&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</span>public class Customer {private String firstName;private String lastName;public void setFirstName(String fName) {this.firstName = fName;}public void setLastName(String lName) {this.lastName = lName;}};<span class="nt">&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;</span>I&#39;ve another class that does the following.<span class="nt">&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</span>public class NameGenerator {public String generateName() {return &quot;Zee Zee&quot;;}};<span class="nt">&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;</span>Is it possible to set the name of customer (inject name into customer) without having passing NameGenerator bean. Rather, I&#39;m expecting to inject the output of <span class="nt">&lt;code&gt;</span>generateName()<span class="nt">&lt;/code&gt;</span> method?<span class="nt">&lt;/p&gt;&lt;p&gt;</span>This question is for sake of understanding if it can or cannot be done and does not necessarily delve into best practices.<span class="nt">&lt;/p&gt;</span>
+</pre></div>
+
+
+<p><strong>Tags:</strong> java spring dependency-injection</p>
+<p>The most likely association rules for the post title are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>autowire</td>
+<td>spring</td>
+<td>157</td>
+<td>0.9235</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>java</td>
+<td>102</td>
+<td>0.6000</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>java</td>
+<td>2236</td>
+<td>0.4529</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>autowired</td>
+<td>63</td>
+<td>0.3706</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>spring</td>
+<td>1532</td>
+<td>0.3103</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>jsf</td>
+<td>1157</td>
+<td>0.2343</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>spring-mvc</td>
+<td>31</td>
+<td>0.1824</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>autowire</td>
+<td>30</td>
+<td>0.1765</td>
+</tr>
+</tbody>
+</table>
+<p>The most likely association rules for the post body are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bean</td>
+<td>java</td>
+<td>12812</td>
+<td>0.4382</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>spring</td>
+<td>8480</td>
+<td>0.2900</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>jsf</td>
+<td>7165</td>
+<td>0.2451</td>
+</tr>
+<tr>
+<td>class</td>
+<td>java</td>
+<td>137473</td>
+<td>0.1859</td>
+</tr>
+<tr>
+<td>method</td>
+<td>c#</td>
+<td>109780</td>
+<td>0.1682</td>
+</tr>
+<tr>
+<td>class</td>
+<td>c#</td>
+<td>116603</td>
+<td>0.1576</td>
+</tr>
+<tr>
+<td>inject</td>
+<td>java</td>
+<td>1788</td>
+<td>0.1522</td>
+</tr>
+<tr>
+<td>inject</td>
+<td>dependency-injection</td>
+<td>1760</td>
+<td>0.1498</td>
+</tr>
+</tbody>
+</table>
+<p>In this example, the association rule algorithm does not work as well.  The top two most likely association rules do indeed correspond to the correct tags of "spring" and "java", however the third correct tag "dependency-injection" has a likelihood of only 0.1498.  Therefore, several incorrect tags such as "autowired", "jsf", "spring-mvc", "autowire",  and "c#" are more likely than the correct tag of "dependency-injection".</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-5.html">Facebook Recruiting III Keyword Extraction - Part 5</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-10-05T00:00:00+02:00">
+          on&nbsp;Sat 05 October 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Implementing the association rule algorithm</h2>
+<p>As stated earlier, words in post titles and words in post bodies are fundamentally different with respect to their influence on the tags that are assigned to that post.  So for this reason, two sets of association rules will be generated - title-tag association rules and body-tag association rules.</p>
+<p>Since the dataset is so large, steps must be taken to make sure that we don't run out of RAM. We can do this by importing the dataset line-by-line such that only one line of the dataset is held in main memory at any one time before it is exported to another csv file.  The association rule algorithm can be implemented in the following steps.</p>
+<ol>
+<li><strong>Find All Combinations:</strong>  The first step is to find all combinations of words (title or body words depending on which set of rules you are finding) and tags that appear in the same posts.  The list of all combinations will be huge! Mine came to about 13GB which would definitely generate a memory error if you were to hold it all in main memory, so each combination must be exported sequentially into another csv file.</li>
+<li><strong>Count All Combinations:</strong>  Now you must import that huge list of all combinations and count the number of times each distinct combination appears in the list.  The counts must be held in main memory, but since you are only holding the counts of each distinct combination, it will be much smaller than 13GB (mine came to about 1.5GB).  Now you have <span class="math">\(|Co(A,B)|\)</span> for all words <span class="math">\(A\)</span> and tags <span class="math">\(B\)</span>!</li>
+<li><strong>Count Overall Word Occurrences:</strong> Next, in order to calculate the required probabilities, we need to count the number of occurrences of each word in the set of post titles (or bodies).</li>
+<li><strong>Calculate Probabilities and Save as Dictionary:</strong>  Now, since we have the word counts and the co-occurrence counts, we can calculate the required probability <span class="math">\(P(B|A)\)</span> for each combination.</li>
+</ol>
+<h3>Code snippets</h3>
+<p>Here are a few snippets of python code to give us a better understanding of how the above steps can be implemented.  The following snippet finds all combinations of words and tags</p>
+<div class="highlight"><pre><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;input_file.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">r</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;output_file.csv&quot;</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+     <span class="n">rdr</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rdr</span><span class="p">:</span>
+          <span class="n">a</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+          <span class="n">b</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+          <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span> <span class="n">b</span><span class="o">.</span><span class="n">split</span><span class="p">()):</span>
+               <span class="n">w</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;{},{}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</pre></div>
+
+
+<p>where a is a string containing the title (or body) of a post and b is a string containing the list of tags for that post.  Also, the product() function is part of the python itertools package which would need to be imported.
+This next snippet shows how the combinations are then counted.</p>
+<div class="highlight"><pre><span class="n">counter</span><span class="o">=</span><span class="p">{}</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;output_file.csv&quot;</span><span class="p">,</span><span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_name</span><span class="p">:</span>
+     <span class="n">reader</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
+          <span class="n">pair</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+          <span class="k">if</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">counter</span><span class="p">:</span>
+               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">+=</span><span class="mi">1</span>
+          <span class="k">else</span><span class="p">:</span>
+               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+
+
+<p>where counter is a dictionary whose key is a word/tag pair and its value is the count of the number of times they co-occur.  All of the other steps in the algorithm can be implemented by modifying these two code snippets in some way.</p>
+<h3>Some results</h3>
+<p>Here are some examples of probability distributions <span class="math">\(P(B|A)\)</span> for different words <span class="math">\(A\)</span>.</p>
+<p>The first of the following plots shows the top 10 most likely tags when the word "C++" appears in a post title and the second plot shows the top 10 most likely tags when "C++" appears in a post body.</p>
+<p><img alt="alt text" src="images/cplusplus3.png" title="C++ title" /> 
+<img alt="alt text" src="images/cplusplus_body1.png" title="C++ body" /></p>
+<p>As one might expect, the most likely tag (by a large margin) is "c++".  It is also interesting to see that the likelihoods are significantly larger for when "C++" appears in the title.  This makes sense intuitively because titles are short and succinct and therefore each title word should generally be more descriptive of the overall post than a word in the post body.</p>
+<p>The next set of plot is for the word "sql".</p>
+<p><img alt="alt text" src="images/sql.png" title="SQL title" /> 
+<img alt="alt text" src="images/sql_body.png" title="SQL body" /></p>
+<p>What is interesting about these tag likelihoods is that there is not a clear winner.  The tags "sql" and "sql-server" are both quite likely.</p>
+<p>The next set of plot is for the more obscure word "geodesic".</p>
+<p><img alt="alt text" src="images/geodesic3.png" title="Geodesic title" /> 
+<img alt="alt text" src="images/geodesic_body.png" title="Geodesic body" /></p>
+<p>There are several interesting differences with these plots.  The first is that the actual post word "geodesic" is not in the top ten most likely tags (it is probably not even in the set of possible tags).  Another difference is that the tag likelihoods are actually larger when "geodesic" appears in the post body.  This is probably because "geodesic" is a more obscure word than "C++" and "sql".</p>
+<p>The next step is to use these association rules to make predictions.  Stay tuned...</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-4.html">Facebook Recruiting III Keyword Extraction - Part 4</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-09-26T00:00:00+02:00">
+          on&nbsp;Thu 26 September 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Finding Association Rules</h2>
+<p>The idea is to develop rules that assign tags to certain words in the post titles and bodies.  For example,</p>
+<p><span class="math">\(eclpise\rightarrow java
+\\derivative \rightarrow calculus
+\\matplotlib \rightarrow python\)</span></p>
+<p>where the words on the left side of the arrow are words in the title/body and words on the right side of the arrow are tags. Once these rules are found, they can be applied to the post words in the test set and the tag word predictions can be found trivially. But first we must come up with a method to generate these rules. This can be done probabilistically using word counts from the training set.</p>
+<h3>Using probabilities to generate association rules</h3>
+<p>The question that needs to be answered is given that word A appears in a post, what is the probability that tag B will also appear in that post? To get this probability, you need to count the number of posts in which word A appears and the also the number of posts in which both word A and tag B appear.  The desired probability can then be calculated as</p>
+<p><span class="math">\(P(B|A)=\frac{|Co(A,B)|}{|A|}\)</span></p>
+<p>where <span class="math">\(|Co(A,B)|\)</span> is the number of posts where word A and tag B co-occur and <span class="math">\(|A|\)</span> is the number of posts where word A occurs.  So, if <span class="math">\(P(B|A)\)</span> is above a certain threshold, we can then generate the association rule <span class="math">\(A \rightarrow B\)</span>. However, this probability is only a point estimate and does not give us any information regarding how certain we are about the estimate.  For example, it is possible to have one case where <span class="math">\(|Co(A_1,B_1)|=9\)</span> and <span class="math">\(|A_1|=10\)</span> thus <span class="math">\(P(B_1|A_1)=90\%\)</span> and a second case where <span class="math">\(|Co(A_2,B_2)|=89\)</span> and <span class="math">\(|A_2|=100\)</span> thus <span class="math">\(P(B_2|A_2)=89\%\)</span>. And since <span class="math">\(P(B_1|A_1)&gt;P(B_2|A_2)\)</span>, you might think that <span class="math">\(A_1 \rightarrow B_1\)</span> is a stronger association rule than <span class="math">\(A_2 \rightarrow B_2\)</span>. However, it is very possible that this assumption is incorrect because we cannot be certain that <span class="math">\(P(B_1|A_1)\)</span> is the true probability because the sample size is so small. Whereas for <span class="math">\(P(B_2|A_2)\)</span> we can be far more certain. So for this reason we must evaluate the association rule based on two criteria - the probability <span class="math">\(P(B|A)\)</span> and also the support which is <span class="math">\(|Co(A,b)|\)</span>.  We should only consider association rules that have a support above a certain threshold value.</p>
+<h3>Potential problems with this method</h3>
+<ul>
+<li><strong>Is it scalable?</strong>  The training data has ~42 thousand unique tag words and many more unique post words.  Can this association rule algorithm be performed on a single machine given the size of the data?</li>
+<li><strong>What are the threshold values?</strong>  How do we determine how large the probabilities <span class="math">\(P(B|A)\)</span> and support need to be in order to warrant an association rule?  i.e. what is the optimal balance between overfitting and underfitting.</li>
+<li><strong>What about the likelihood of co-occurring tags?</strong>  In this method we are only generating association rules between post words and tags, but there is no doubt that certain tags are more likely to occur together than others.  We have that information in the training set.  Shouldn't we use that information too?
+These are all valid questions that we must think about before any kind of submission can be made...</li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-3.html">Facebook Recruiting III Keyword Extraction - Part 3</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-09-21T00:00:00+02:00">
+          on&nbsp;Sat 21 September 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Is this a Clustering Problem?</h2>
+<p>At first glance this problem looks like a clustering problem.  You can think of the tags as the cluster centroids and based on the words in the post title/body you can determine which clusters (tags words) each post is closest to.  In this way you can assign posts to tags in the test set.</p>
+<p>The problem with this is that there is no guarantee that the training set holds all of the tag words that appear in the test set.  This is confirmed by this post in the Kaggle forum.  So if there are new tags in the test set, then perhaps this is more of an inference problem than a clustering problem.  However, we should not rely solely on a forum post so let's come up with some evidence to give us an idea of how many unseen tags will be in the test set.</p>
+<h2>Time for an Experiment!</h2>
+<p>We can use the training set to give us an idea of how many unseen tags will be present in the test set.  The training set has ~6 million examples and the test set has ~2 million examples.  That's a ratio of about 3:1.  So the experiment will be to divide the training set into the same 3:1 ratio and we shall see how many tags appear in the small portion but not the large portion.  So the large portion will have ~4.5 million examples and the small portion will have ~1.5 million examples.  The following are some of the results of this experiment.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>examples in portion A</td>
+<td>4500000</td>
+</tr>
+<tr>
+<td>examples in portion B</td>
+<td>1534194</td>
+</tr>
+<tr>
+<td>unique tags in A</td>
+<td>41251</td>
+</tr>
+<tr>
+<td>unique tags in B</td>
+<td>37179</td>
+</tr>
+<tr>
+<td>tags in B but not in A</td>
+<td>797</td>
+</tr>
+<tr>
+<td>occurrences of these tags in B</td>
+<td>972</td>
+</tr>
+<tr>
+<td>average number of occurrences of each of these tags in B</td>
+<td>1.22</td>
+</tr>
+</tbody>
+</table>
+<p>So from the above results, only ~2% of the tags in B are not in A.  And these tags also occur very rarely in B, (only about once for each tag).  Therefore, we can conclude that the vast majority of tags that appear in B also appear in A.  We can also therefore assume that the vast majority of tags that appear in the test set also appear in the training set.  So we can confidently assume that we can treat this as a clustering problem!</p>
+                    </article>
+ 
+<div class="paginator">
+    <div class="navButton">Page 1 / 2</div>
+        <div class="navButton"><a href="/category/kaggle-competitions2.html" >Next</a></div>
+</div>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

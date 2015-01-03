@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Latent Dirichlet Allocation in Scala Part II - The Code</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory  </a><br /><br />
+          </div>
+
+</div>
+
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html" rel="bookmark"
+               title="Permalink to Latent Dirichlet Allocation in Scala Part II - The Code">Latent Dirichlet Allocation in Scala Part II - The Code</a></h1>
+
+        </header>
+
+        <div class="entry-content">
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-08-10T00:00:00+02:00">
+          on&nbsp;Sun 10 August 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info -->          <p>The theory behind Latent Dirichlet Allocation was outlined in the the <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">previous blog post</a>.  Now the goal is to translate this theory into a fully-fledged Scala application.  There are two main entities in the LDA algorithm</p>
+<ol>
+<li><strong>The Corpus:</strong>  This is the collection of documents.  Functionality is needed to accept documents from the user, create a vocabulary, perform text preprocessing, maintain document-level and corpus-level word counts, and returning the desired output back to the user.</li>
+<li><strong>Inference:</strong>  The core aspect of this algorithm is the collapsed Gibbs sampling inference step.  This must be implemented efficiently and correctly.</li>
+</ol>
+<h2>The Corpus</h2>
+<h3>Getting a vocabulary</h3>
+<p>The first task that the corpus class must undertake is getting a vocabulary from the given documents.  Stop words must be removed and we also want to remove low-frequency words (these words would most likely not show up in any topics anyway so it is best to remove them for memory-management reasons).  The low-frequency cut-off threshold should be supplied by the user.  In order to determine the low-frequency words, a corpus-wide word count must be performed.  Also, it is good practice to remove stop words and words that are either too short or too long.  The following <code>CountVocab</code> class performs the required word count, then removes words that are too infrequent, are part of a stop word list, or are not within the allowable length bounds.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">CountVocab</span><span class="o">(</span><span class="n">filePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">minCount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Vocabulary</span> <span class="o">{</span>
+
+  <span class="k">val</span> <span class="n">stopWords</span> <span class="k">=</span> <span class="nc">Source</span><span class="o">.</span><span class="n">fromURL</span><span class="o">(</span><span class="n">getClass</span><span class="o">.</span><span class="n">getResource</span><span class="o">(</span><span class="s">&quot;/english_stops_words.txt&quot;</span><span class="o">)).</span><span class="n">mkString</span><span class="o">.</span><span class="n">split</span><span class="o">(</span><span class="s">&quot;\n&quot;</span><span class="o">).</span><span class="n">toSet</span>
+
+  <span class="k">def</span> <span class="n">getVocabulary</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">var</span> <span class="n">vocabulary</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="nc">HashMap</span><span class="o">.</span><span class="n">empty</span>
+    <span class="k">var</span> <span class="n">wordCounter</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="nc">HashMap</span><span class="o">.</span><span class="n">empty</span>
+
+    <span class="k">def</span> <span class="n">countWords</span><span class="o">(</span><span class="n">docFile</span><span class="k">:</span> <span class="kt">File</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">tokens</span> <span class="k">=</span> <span class="nc">StanfordTokenizer</span><span class="o">.</span><span class="n">tokenizeFile</span><span class="o">(</span><span class="n">docFile</span><span class="o">)</span>
+
+      <span class="k">for</span> <span class="o">(</span><span class="n">token</span> <span class="k">&lt;-</span> <span class="n">tokens</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">wordCounter</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">wordCounter</span> <span class="o">+=</span> <span class="o">(</span><span class="n">token</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">wordCounter</span><span class="o">(</span><span class="n">token</span><span class="o">)</span> <span class="o">+</span> <span class="mi">1</span><span class="o">))</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="k">if</span> <span class="o">(!</span><span class="n">stopWords</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">token</span><span class="o">.</span><span class="n">matches</span><span class="o">(</span><span class="s">&quot;\\p{Punct}&quot;</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="n">token</span><span class="o">.</span><span class="n">length</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">&amp;&amp;</span> <span class="n">token</span><span class="o">.</span><span class="n">length</span> <span class="o">&lt;</span> <span class="mi">15</span> <span class="o">&amp;&amp;</span> <span class="n">token</span> <span class="o">!=</span> <span class="s">&quot;-lrb-&quot;</span> <span class="o">&amp;&amp;</span> <span class="n">token</span> <span class="o">!=</span> <span class="s">&quot;-rrb-&quot;</span><span class="o">)</span> <span class="o">{</span>
+          <span class="n">wordCounter</span> <span class="o">+=</span> <span class="o">(</span><span class="n">token</span> <span class="o">-&gt;</span> <span class="mi">1</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">filePath</span><span class="o">).</span><span class="n">listFiles</span><span class="o">.</span><span class="n">toIterator</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">isFile</span><span class="o">).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">docFile</span> <span class="k">=&gt;</span> <span class="n">countWords</span><span class="o">(</span><span class="n">docFile</span><span class="o">))</span>
+
+    <span class="k">for</span> <span class="o">((</span><span class="n">w</span><span class="o">,</span> <span class="n">freq</span><span class="o">)</span> <span class="k">&lt;-</span> <span class="n">wordCounter</span><span class="o">)</span> <span class="o">{</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">freq</span> <span class="o">&gt;=</span> <span class="n">minCount</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">vocabulary</span> <span class="o">+=</span> <span class="o">(</span><span class="n">w</span> <span class="o">-&gt;</span> <span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span><span class="o">)</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="n">vocabulary</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The above function takes a file path as an input parameter that points to the directory containing the documents (in text file format) on which you are going to perform LDA.  It also takes a frequency threshold parameter, below which a word is deemed too infrequent to be useful.  There is a nested function that performs a word count on the important words (tokenized with the Stanford coreNLP tokenizer), then we iterate through the counted words and keep the ones above the frequency threshold.  Also, we create a hashmap where every word we keep is mapped to a unique integer ID which will be used later.</p>
+<h3>Keeping Track of the Topic Assignment Counts</h3>
+<p>From <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I</a>, we learned that the probabilities that we are interested in are dependent upon the topics that are assigned to each word in the corpus.  During the Gibbs sampling procedure, the topic assignments are constantly being updated and the conditional distribution that is being sampled from also needs to be updated to reflect the new topic assignments.  Therefore, we need a way of keeping tack of these topic assignment counts.  This will be done with two matrices (using the <a href="https://github.com/scalanlp/breeze">Breeze</a> linear algebra library) - a topic/word matrix that counts how many times each word is assigned to each topic, and a document/topic matrix that counts how many words each topic is assigned to in each document.  Furthermore, we need to initialize the Gibbs sampling procedure by randomly assigning each word to a topic.  This is all done in the following <code>CollapsedLDACorpus</code> class.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">CollapsedLDACorpus</span><span class="o">(</span><span class="n">vocab</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">],</span> <span class="n">numTopics</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">docDirectory</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Corpus</span> <span class="o">{</span>
+
+  <span class="k">val</span> <span class="n">numDocs</span> <span class="k">=</span> <span class="nc">DocUtils</span><span class="o">.</span><span class="n">numDocs</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">)</span>
+  <span class="k">val</span> <span class="n">vocabulary</span> <span class="k">=</span> <span class="n">vocab</span>
+  <span class="k">var</span> <span class="n">docTopicMatrix</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numDocs</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">)</span>
+  <span class="k">var</span> <span class="n">topicWordMatrix</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numTopics</span><span class="o">,</span> <span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span><span class="o">)</span>
+  <span class="k">var</span> <span class="n">words</span><span class="k">:</span> <span class="kt">Vector</span><span class="o">[</span><span class="kt">Word</span><span class="o">]</span> <span class="k">=</span> <span class="nc">Vector</span><span class="o">.</span><span class="n">empty</span>
+
+  <span class="k">val</span> <span class="n">randomTopicGenerator</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Random</span>
+  <span class="k">var</span> <span class="n">docIndex</span> <span class="k">=</span> <span class="mi">0</span>
+
+  <span class="k">def</span> <span class="n">processDoc</span><span class="o">(</span><span class="n">contents</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">tokens</span> <span class="k">=</span> <span class="nc">StanfordTokenizer</span><span class="o">.</span><span class="n">tokenizeString</span><span class="o">(</span><span class="n">contents</span><span class="o">)</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">token</span> <span class="k">&lt;-</span> <span class="n">tokens</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">randTopic</span> <span class="k">=</span> <span class="n">randomTopicGenerator</span><span class="o">.</span><span class="n">nextInt</span><span class="o">(</span><span class="n">numTopics</span><span class="o">)</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="c1">//Assign the word to a random topic</span>
+        <span class="n">words</span> <span class="o">:+=</span> <span class="nc">Word</span><span class="o">(</span><span class="n">token</span><span class="o">,</span> <span class="n">docIndex</span><span class="o">,</span> <span class="n">randTopic</span><span class="o">)</span>
+        <span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">docIndex</span><span class="o">,</span> <span class="n">randTopic</span><span class="o">)</span> <span class="o">+=</span> <span class="mf">1.0</span>
+        <span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">randTopic</span><span class="o">,</span> <span class="n">vocabulary</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">+=</span> <span class="mf">1.0</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+    <span class="n">docIndex</span> <span class="o">+=</span> <span class="mi">1</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">initialize</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">).</span><span class="n">listFiles</span><span class="o">.</span><span class="n">toIterator</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">getName</span><span class="o">.</span><span class="n">endsWith</span><span class="o">(</span><span class="s">&quot;.txt&quot;</span><span class="o">)).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">docFile</span> <span class="k">=&gt;</span> <span class="n">processDoc</span><span class="o">(</span><span class="n">fromFile</span><span class="o">(</span><span class="n">docFile</span><span class="o">).</span><span class="n">getLines</span><span class="o">().</span><span class="n">mkString</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">reverseVocab</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">Int</span>, <span class="kt">String</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="n">vocabulary</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="k">_</span> <span class="n">swap</span><span class="o">)</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>There is also an <code>processDoc</code> function that assigns each word in the document (that is in the vocabulary) to a random topic and increments the corresponding entries <code>docTopicMatrix</code> and <code>topicWordMatrix</code>.  The topic assignments are assigned within objects of a case class called <code>Word</code> that maintains the state of each word.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="k">class</span> <span class="nc">Word</span><span class="o">(</span><span class="n">token</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">doc</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="k">var</span> <span class="n">topic</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
+</pre></div>
+
+
+<p>The state of a word is its assigned topic, the document that it appears in, and the actual string value of the word itself.</p>
+<h2>Inference</h2>
+<p>The collapsed Gibbs sampling inference algorithm was described in detail in <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I of this blog post</a>.  In short, topic assignments are repeatedly sampled from a conditional distribution and after enough samples have been performed, it is assumed that the samples are taken from the posterior distribution over topic assignments.  Then, the <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> probabilities can be computed from these inferred topic assignments.  The following <code>collapsedGibbs</code> class performs this these tasks.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">CollapsedGibbs</span><span class="o">(</span><span class="n">corpus</span><span class="k">:</span> <span class="kt">CollapsedLDACorpus</span><span class="o">,</span> <span class="n">docDirectory</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">vocabThreshold</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">K</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">alpha</span><span class="k">:</span> <span class="kt">Double</span><span class="o">,</span> <span class="n">beta</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">TopicModel</span> <span class="o">{</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * For a given word, calculate the conditional distribution over topic assignments to be sampled from.</span>
+<span class="cm">   * @param word word whose topic will be inferred from the Gibb&#39;s sampler.</span>
+<span class="cm">   * @return distribution over topics for the word input.</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">gibbsDistribution</span><span class="o">(</span><span class="n">word</span><span class="k">:</span> <span class="kt">Word</span><span class="o">)</span><span class="k">:</span> <span class="kt">Multinomial</span><span class="o">[</span><span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">docTopicRow</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span>
+    <span class="k">val</span> <span class="n">topicWordCol</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(::,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span>
+    <span class="k">val</span> <span class="n">topicSums</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">,</span> <span class="nc">Axis</span><span class="o">.</span><span class="n">_1</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">params</span> <span class="k">=</span> <span class="o">(</span><span class="n">docTopicRow</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">)</span> <span class="o">:*</span> <span class="o">(</span><span class="n">topicWordCol</span> <span class="o">+</span> <span class="n">beta</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">topicSums</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">beta</span><span class="o">)</span>
+
+    <span class="c1">//normalize parameters</span>
+    <span class="k">val</span> <span class="n">normalizingConstant</span> <span class="k">=</span> <span class="n">sum</span><span class="o">(</span><span class="n">params</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">normalizedParams</span> <span class="k">=</span> <span class="n">params</span> <span class="o">:/</span> <span class="n">normalizingConstant</span>
+
+    <span class="nc">Multinomial</span><span class="o">(</span><span class="n">normalizedParams</span><span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Gibbs sampler for LDA</span>
+<span class="cm">   * @param numIter number of iterations that Gibbs sampler will be run</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">gibbsSample</span><span class="o">(</span><span class="n">numIter</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="mi">200</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">iter</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numIter</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="n">println</span><span class="o">(</span><span class="n">iter</span><span class="o">)</span>
+
+      <span class="k">for</span> <span class="o">(</span><span class="n">word</span> <span class="k">&lt;-</span> <span class="n">corpus</span><span class="o">.</span><span class="n">words</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">multinomialDist</span> <span class="k">=</span> <span class="n">gibbsDistribution</span><span class="o">(</span><span class="n">word</span><span class="o">)</span>
+
+        <span class="k">val</span> <span class="n">oldTopic</span> <span class="k">=</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span>
+
+        <span class="c1">//reassign word to topic determined by sample</span>
+        <span class="n">word</span><span class="o">.</span><span class="n">topic</span> <span class="k">=</span> <span class="n">multinomialDist</span><span class="o">.</span><span class="n">draw</span><span class="o">()</span>
+
+        <span class="c1">//If topic assignment has changed, must also change count matrices</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">oldTopic</span> <span class="o">!=</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">)</span> <span class="o">{</span>
+
+          <span class="c1">//increment counts to due to reassignment to new topic</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span> <span class="o">+=</span> <span class="mf">1.0</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">)</span> <span class="o">+=</span> <span class="mf">1.0</span>
+
+          <span class="c1">//decrement counts of old topic assignment that has been changed</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">oldTopic</span><span class="o">,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span> <span class="o">-=</span> <span class="mf">1.0</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="n">oldTopic</span><span class="o">)</span> <span class="o">-=</span> <span class="mf">1.0</span>
+
+        <span class="o">}</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Calculate theta matrix directly from doc/topic counts.  Overwrite counts matrix to save memory.</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">getTheta</span> <span class="o">{</span>
+
+    <span class="c1">//we turn the counts matrix into a probability matrix</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">doc</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">corpus</span><span class="o">.</span><span class="n">numDocs</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">countToProb</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">((</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::)</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">)</span> <span class="o">+</span> <span class="n">K</span> <span class="o">*</span> <span class="n">alpha</span><span class="o">)).</span><span class="n">t</span>
+      <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">countToProb</span><span class="o">.</span><span class="n">t</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Calculate phi matric directly from topic/word counts.  Overwrite counts matrix to save memory.</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">getPhi</span> <span class="o">{</span>
+
+    <span class="c1">//we turn the counts matrix into a probability matrix</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">topic</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">K</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">countToProb</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">((</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::)</span> <span class="o">+</span> <span class="n">beta</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">)</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">beta</span><span class="o">)).</span><span class="n">t</span>
+      <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">countToProb</span><span class="o">.</span><span class="n">t</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Perform all inference steps - gibbs sampling, calculating theta matrix, calculating phi matrix.</span>
+<span class="cm">   */</span>
+  <span class="k">def</span> <span class="n">inference</span> <span class="o">{</span>
+    <span class="n">gibbsSample</span><span class="o">()</span>
+    <span class="n">getTheta</span>
+    <span class="n">getPhi</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Print topics found by LDA algorithm.</span>
+<span class="cm">   * @param numWords Determines how many words to display for each topic.</span>
+<span class="cm">   */</span>
+  <span class="k">def</span> <span class="n">printTopics</span><span class="o">(</span><span class="n">numWords</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="c1">//want to actually show the words, so we need to extract strings from ids</span>
+    <span class="k">val</span> <span class="n">revV</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">reverseVocab</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">topic</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">K</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="c1">//tie probability to column index, then sort by probabiltiy, take the top numWords, map column index to corresponding word</span>
+      <span class="n">println</span><span class="o">(</span><span class="s">&quot;Topic #&quot;</span> <span class="o">+</span> <span class="n">topic</span> <span class="o">+</span> <span class="s">&quot;:  &quot;</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">sortBy</span><span class="o">(-</span><span class="k">_</span><span class="o">.</span><span class="n">_1</span><span class="o">).</span><span class="n">take</span><span class="o">(</span><span class="n">numWords</span><span class="o">).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">revV</span><span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">_2</span><span class="o">)))</span>
+
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * For a given document, display most likely topics occurring in it.</span>
+<span class="cm">   * @param docIndex index of document to be analyzed.</span>
+<span class="cm">   * @param probCutoff Determines how likely a topic has to be for it to be displayed.</span>
+<span class="cm">   */</span>
+  <span class="k">def</span> <span class="n">printTopicProps</span><span class="o">(</span><span class="n">docIndex</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">probCutoff</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="c1">//tie probability to column index, filter probabilities by probCutoff</span>
+    <span class="n">println</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">docIndex</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">_1</span> <span class="o">&gt;</span> <span class="n">probCutoff</span><span class="o">).</span><span class="n">toList</span><span class="o">)</span>
+
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The full inference procedure is performed in the <code>inference</code> method. First the Gibbs sampling procedure is performed.  This is done by iterating over each word in the corpus and during each iteration, the conditional probability distribution over all topics for that word is calculated with the following equation from <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I</a>,</p>
+<p>
+<div class="math">$$P(z_i=j|z_{-i},w) \propto \frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}$$</div>
+</p>
+<p>This is done in the method called <code>gibbsDistribution</code>.  The distribution is returned as a Multinomial distribution (see the scaladocs for <a href="http://www.scalanlp.org/api/breeze/#breeze.stats.distributions.package">Breeze Multinomial distribution</a>).  Then a new topic is sampled from this multinomial distribution and assigned to the word object.  And finally, the doc/topic and topic/word counts are updated to reflect this new assignment (where the word ID from vocabulary is used to associate words with columns in the topic/word matrix).  This sampling procedure runs for 10,000 iterations (so that we can be sure that MCMC convergence has occurred).  The next step in <code>inference</code> is to calculate the <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> probability matrices.  This is done using the count matrices and the following equations from part I,</p>
+<p><span class="math">\(\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}\)</span> and <span class="math">\(\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}\)</span></p>
+<p>The count matrices are transformed into probability matrices in place to save on memory.  The <code>printTopics</code> method prints the topics found from the <span class="math">\(\theta\)</span> matrix in terms of the most likely words for each topic.  The <code>printTopicProps</code> method prints the most likely topics for a particular document within the corpus from the <span class="math">\(\phi\)</span> matrix.</p>
+<p>Hopefully this series of blog posts has shed some light on some of the mysteries of Latent Dirichlet Allocation.  The above code snippets were taken from my Scala implementation that you can find at my <a href="https://github.com/alexminnaar/ScalaTopicModels">ScalaTopicModels github repo</a>.</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+        </div><!-- /.entry-content -->
+        <div class="comments">
+
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "latent-dirichlet-allocation-in-scala-part-ii-the-code.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
+
+      </article>
+    </div>
+</section>
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

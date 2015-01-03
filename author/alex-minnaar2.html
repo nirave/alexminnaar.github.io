@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Alex Minnaar's Blog - Machine Learning, Data Science and Software Engineering - Alex Minnaar</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory  </a><br /><br />
+          </div>
+
+</div>
+
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/time-series-classification-and-clustering-with-python.html">Time Series Classification and Clustering with Python</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-04-16T00:00:00+02:00">
+          on&nbsp;Wed 16 April 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+</div><!-- /.post-info --><p>I recently ran into a problem at work where I had to predict whether an account would churn  in the near future given the account's time series usage in a certain time interval.  So this is a binary-valued classification problem (i.e. churn or not churn) with a time series as a predictor.  This was not a very straight-forward problem to tackle because it seemed like there two possible strategies to employ.</p>
+<ol>
+<li>Extract features from the time series like its mean, maximum, minimum, and other differential features.  Then use well-known classification algorithms (Naive Bayes, SVMs, etc.) with these features to make a prediction.</li>
+<li>Use a k-NN approach.  For a given time series example that you want to predict, find the most similar time series in the training set and use its corresponding output as the prediction.</li>
+</ol>
+<p>I tried both of these strategies and the latter produced the best results.  However this approach is not as simple as it may seem.  This is because finding a good similarity measure between time series is a very non-trivial task.</p>
+<h2>Finding a Similarity Measure</h2>
+<p>A naive choice for a similarity measure would be Euclidean distance.  The following example will show why this choice is not optimal.  Consider the following of 3 time series.</p>
+<p><img alt="alt text" src="images/3_ts.png" title="time series examples" /> </p>
+<p>In the above example, it is clear that <span class="math">\(ts1\)</span> and <span class="math">\(ts2\)</span> are most similar (they are both sin functions under different transformations). <span class="math">\(ts3\)</span> is clearly the most different. Let's compute the Euclidean distance <span class="math">\(d(ts1,ts2)\)</span> and <span class="math">\(d(ts1,ts3)\)</span> to see if the Euclidean distance measure agrees with what our intuition tells us. Let's first create a function that computes the Euclidean distance between two time series using</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">euclid_dist</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span><span class="n">t2</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">((</span><span class="n">t1</span><span class="o">-</span><span class="n">t2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+</pre></div>
+
+
+<p>It turns out that <span class="math">\(d(ts1,ts2)=26.9\)</span> and <span class="math">\(d(ts1,ts3)=23.2\)</span>. This is not good because according to the Euclidean distance measure, <span class="math">\(ts1\)</span> is more similar to <span class="math">\(ts3\)</span> than to <span class="math">\(ts2\)</span> which contradicts our intuition. This is the problem with using the Euclidean distance measure. It often produced pessimistic similarity measures when it encounters distortion in the time axis. The way to deal with this is to use dynamic time warping.</p>
+<h3>Dynamic Time Warping</h3>
+<p>Dynamic time warping finds the optimal non-linear alignment between two time series. The Euclidean distances between alignments are then much less susceptible to pessimistic similarity measurements due to distortion in the time axis. There is a price to pay for this, however, because dynamic time warping is quadratic in the length of the time series used.</p>
+<p>Dynamic time warping works in the following way. Consider two time series <span class="math">\(Q\)</span> and <span class="math">\(C\)</span> of the same length <span class="math">\(n\)</span> where <span class="math">\(Q=q_1,q_2,...,q_n\)</span> and <span class="math">\(C=c_1,c_2,...,c_n\)</span> The first thing we do is construct an <span class="math">\(n\times n\)</span> matrix whose <span class="math">\(i,j^{th}\)</span> element is the Euclidean distance between <span class="math">\(q_i\)</span> and <span class="math">\(c_j\)</span>. We want to find a path through this matrix that minimizes the cumulative distance. This path then determines the optimal alignment between the two time series. It should be noted that it is possible for one point in a time series to be mapped to multiple points in the other time series.</p>
+<p>Let's call the path <span class="math">\(W\)</span> where <span class="math">\(W=w_1,w_2,...,w_K\)</span> where each element of <span class="math">\(W\)</span> represents the distance between a point <span class="math">\(i\)</span> in <span class="math">\(Q\)</span> and a point <span class="math">\(j\)</span> in <span class="math">\(C\)</span> i.e. <span class="math">\(w_k=(q_i-c_j)^2\)</span></p>
+<p>So we want to find the path with the minimum Euclidean distance <span class="math">\(W^*=argmin_W(\sqrt{\sum_{k=1}^Kw_k})\)</span> The optimal path is found via dynamic programming, specifically the following recursive function. <span class="math">\(\gamma(i,j)=d(q_i,c_j)+min ( \gamma(i-1,j-1),\gamma(i-1,j),\gamma(i,j-1))\)</span>. This can be implemented via the following python function.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">DTWDistance</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">):</span>
+    <span class="n">DTW</span><span class="o">=</span><span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
+        <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
+        <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
+    <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
+            <span class="n">dist</span><span class="o">=</span> <span class="p">(</span><span class="n">s1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="n">s2</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span>
+            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dist</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">)],</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)],</span> <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)])</span>
+
+    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">DTW</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+
+
+<p>The dynamic time warping Euclidean distances between the time series are <span class="math">\(DTWDistance(ts1,ts2)=17.9\)</span> and <span class="math">\(DTWDistance(ts1,ts3)=21.5\)</span>. As you can see, our results have changed from when we only used the Euclidean distance measure. Now, in agreement with our intuition, <span class="math">\(ts2\)</span> is shown to be more similar to <span class="math">\(ts1\)</span> than <span class="math">\(ts3\)</span> is.</p>
+<h3>Speeding Up Dynamic Time Warping</h3>
+<p>Dynamic time warping has a complexity of <span class="math">\(O(nm)\)</span> where <span class="math">\(n\)</span> is the length of the first time series and <span class="math">\(m\)</span> is the length of the second time series. If you are performing dynamic time warping multiple times on long time series data, this can be prohibitively expensive. However, there are a couple of ways to speed things up. The first is to enforce a locality constraint. This works under the assumption that it is unlikely for <span class="math">\(q_i\)</span> and <span class="math">\(c_j\)</span> to be matched if <span class="math">\(i\)</span> and <span class="math">\(j\)</span> are too far apart. The threshold is determined by a window size <span class="math">\(w\)</span>. This way, only mappings within this window are considered which speeds up the inner loop. The following is the modified code which includes the window size <span class="math">\(w\)</span>.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">DTWDistance</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
+    <span class="n">DTW</span><span class="o">=</span><span class="p">{}</span>
+
+    <span class="n">w</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)))</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
+            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
+    <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">i</span><span class="o">-</span><span class="n">w</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">),</span> <span class="n">i</span><span class="o">+</span><span class="n">w</span><span class="p">)):</span>
+            <span class="n">dist</span><span class="o">=</span> <span class="p">(</span><span class="n">s1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="n">s2</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span>
+            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dist</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">)],</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)],</span> <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)])</span>
+
+    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">DTW</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+
+
+<p>Another way to speed things up is to use the LB Keogh lower bound of dynamic time warping. It is defined as </p>
+<p><span class="math">\(LBKeogh(Q,C)=\sum_{i=1}^n (c_i-U_i)^2I(c_i &gt; U_i)+(c_i-L_i)^2I(c_i &lt; L_i)\)</span> </p>
+<p>where <span class="math">\(U_i\)</span> and <span class="math">\(L_i\)</span> are upper and lower bounds for time series <span class="math">\(Q\)</span> which are defined as <span class="math">\(U_i=max(q_{i-r}:q_{i+r})\)</span> and <span class="math">\(L_i=min(q_{i-r}:q_{i+r})\)</span> for a reach <span class="math">\(r\)</span> and <span class="math">\(I(\cdot)\)</span> is the indicator function. It can be implemented with the following function.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">LB_Keogh</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span><span class="n">s2</span><span class="p">,</span><span class="n">r</span><span class="p">):</span>
+    <span class="n">LB_sum</span><span class="o">=</span><span class="mi">0</span>
+    <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">s1</span><span class="p">):</span>
+
+        <span class="n">lower_bound</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">s2</span><span class="p">[(</span><span class="n">ind</span><span class="o">-</span><span class="n">r</span> <span class="k">if</span> <span class="n">ind</span><span class="o">-</span><span class="n">r</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):(</span><span class="n">ind</span><span class="o">+</span><span class="n">r</span><span class="p">)])</span>
+        <span class="n">upper_bound</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">s2</span><span class="p">[(</span><span class="n">ind</span><span class="o">-</span><span class="n">r</span> <span class="k">if</span> <span class="n">ind</span><span class="o">-</span><span class="n">r</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):(</span><span class="n">ind</span><span class="o">+</span><span class="n">r</span><span class="p">)])</span>
+
+        <span class="k">if</span> <span class="n">i</span><span class="o">&gt;</span><span class="n">upper_bound</span><span class="p">:</span>
+            <span class="n">LB_sum</span><span class="o">=</span><span class="n">LB_sum</span><span class="o">+</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="n">upper_bound</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+        <span class="k">elif</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">lower_bound</span><span class="p">:</span>
+            <span class="n">LB_sum</span><span class="o">=</span><span class="n">LB_sum</span><span class="o">+</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="n">lower_bound</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+
+    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">LB_sum</span><span class="p">)</span>
+</pre></div>
+
+
+<p>The LB Keogh lower bound method is linear whereas dynamic time warping is quadratic in complexity which make it very advantageous for searching over large sets of time series.</p>
+<h2>Classification and Clustering</h2>
+<p>Now that we have a reliable method to determine the similarity between two time series, we can use the k-NN algorithm for classification. Empirically, the best results have come when <span class="math">\(k=1\)</span>. The following is the 1-NN algorithm that uses dynamic time warping Euclidean distance. In this algorithm, <span class="math">\(train\)</span> is the training set of time series examples where the class that the time series belongs to is appended to the end of the time series. <span class="math">\(test\)</span> is the test set whose corresponding classes you are trying to predict. In this algorithm, for every time series in the test set, a search must be performed through all points in the training set so that the most similar point is found. Given that dynamic time warping is quadratic, this can be very computationally expensive. We can speed up classification using the LB Keogh lower bound. Computing LB Keogh is much less expensive than performing dynamic time warping. And since <span class="math">\(LB Keogh(Q,C) \leq DTW(Q,C)\)</span> , we can eliminate time series that cannot possibly be more similar that the current most similar time series. In this way we are eliminating many unnecessary dynamic time warping computations.</p>
+<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">classification_report</span>
+
+<span class="k">def</span> <span class="nf">knn</span><span class="p">(</span><span class="n">train</span><span class="p">,</span><span class="n">test</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
+    <span class="n">preds</span><span class="o">=</span><span class="p">[]</span>
+    <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">test</span><span class="p">):</span>
+        <span class="n">min_dist</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
+        <span class="n">closest_seq</span><span class="o">=</span><span class="p">[]</span>
+        <span class="c">#print ind</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">train</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">LB_Keogh</span><span class="p">(</span><span class="n">i</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">j</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
+                <span class="n">dist</span><span class="o">=</span><span class="n">DTWDistance</span><span class="p">(</span><span class="n">i</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">j</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">w</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">dist</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
+                    <span class="n">min_dist</span><span class="o">=</span><span class="n">dist</span>
+                    <span class="n">closest_seq</span><span class="o">=</span><span class="n">j</span>
+        <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">closest_seq</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">classification_report</span><span class="p">(</span><span class="n">test</span><span class="p">[:,</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">preds</span><span class="p">)</span>
+</pre></div>
+
+
+<p>Now let's test it on some data. We will use a window size of 4. Although the code is sped up with the use of the LB Keogh bound and the dynamic time warping locality constraint, it may still take a few minutes to run.</p>
+<div class="highlight"><pre><span class="n">train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/train.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/test.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">knn</span><span class="p">(</span><span class="n">train</span><span class="p">,</span><span class="n">test</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+
+
+<p>The result is</p>
+<p><img alt="alt text" src="images/perfromance.jpg" title="performance" /> </p>
+<p>The same idea can also be applied to k-means clustering. In this algorithm, the number of clusters is set apriori and similar time series are clustered together.</p>
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">random</span>
+
+<span class="k">def</span> <span class="nf">k_means_clust</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">num_clust</span><span class="p">,</span><span class="n">num_iter</span><span class="p">,</span><span class="n">w</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="n">centroids</span><span class="o">=</span><span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">num_clust</span><span class="p">)</span>
+    <span class="n">counter</span><span class="o">=</span><span class="mi">0</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_iter</span><span class="p">):</span>
+        <span class="n">counter</span><span class="o">+=</span><span class="mi">1</span>
+        <span class="k">print</span> <span class="n">counter</span>
+        <span class="n">assignments</span><span class="o">=</span><span class="p">{}</span>
+        <span class="c">#assign data points to clusters</span>
+        <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+            <span class="n">min_dist</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
+            <span class="n">closest_clust</span><span class="o">=</span><span class="bp">None</span>
+            <span class="k">for</span> <span class="n">c_ind</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">centroids</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">LB_Keogh</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
+                    <span class="n">cur_dist</span><span class="o">=</span><span class="n">DTWDistance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">w</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">cur_dist</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
+                        <span class="n">min_dist</span><span class="o">=</span><span class="n">cur_dist</span>
+                        <span class="n">closest_clust</span><span class="o">=</span><span class="n">c_ind</span>
+            <span class="k">if</span> <span class="n">closest_clust</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
+                <span class="n">assignments</span><span class="p">[</span><span class="n">closest_clust</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ind</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">assignments</span><span class="p">[</span><span class="n">closest_clust</span><span class="p">]</span><span class="o">=</span><span class="p">[]</span>
+
+        <span class="c">#recalculate centroids of clusters</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
+            <span class="n">clust_sum</span><span class="o">=</span><span class="mi">0</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
+                <span class="n">clust_sum</span><span class="o">=</span><span class="n">clust_sum</span><span class="o">+</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+            <span class="n">centroids</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">=</span><span class="p">[</span><span class="n">m</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">assignments</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">clust_sum</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">centroids</span>
+</pre></div>
+
+
+<p>Let's test it on the entire data set (i.e. the training set and the test set stacked together).</p>
+<div class="highlight"><pre><span class="n">train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/train.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/test.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">train</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">test</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.pylab</span> <span class="kn">as</span> <span class="nn">plt</span>
+
+<span class="n">centroids</span><span class="o">=</span><span class="n">k_means_clust</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">10</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">centroids</span><span class="p">:</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+
+
+<p><img alt="alt text" src="images/cluster.png" title="cluster" /> </p>
+<h3>Code</h3>
+<p>The code used in this blog post can be found in <a href="https://github.com/alexminnaar/time-series-classification-and-clustering">my gitHub repo</a>.</p>
+<h3>References</h3>
+<p>The vast majority of research in this area is done by Dr. Eamonn Keogh's group at UC Riverside.  All of the relevant papers are referenced in <a href="http://www.cs.ucr.edu/~eamonn/time_series_data/">the group's webpage</a>.</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/my-experience-with-churn-analysis.html">My Experience with Churn Analysis</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-03-30T00:00:00+01:00">
+          on&nbsp;Sun 30 March 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+</div><!-- /.post-info --><p>A large chunk of my time at my last job was devoted to churn analysis and I wanted to use this blog entry to explain how I approached the various problems that it presented.  This is not meant to be a very technical post and the reasoning behind this is two-fold</p>
+<ol>
+<li>Obviously I do not have permission to use any company data and there is not really any good publicly-available churn datasets on the web.  Presenting technical code without data to run it on would not really make sense.</li>
+<li>I have learned that churn analysis is very domain-specific and I want to make sure that what I say generalizes to many use-cases.</li>
+</ol>
+<p>Before I explain what I did, I should first define what churn is and the specific goals that I had in mind.</p>
+<h2>What is Churn?</h2>
+<p>Churn is a term that generally describes the process where customers stop using the products and/or services provided by a business.  However, it is of most interest in subscription-based services like phone plans, video games, etc.  In these services it is easy to know when a customer has churned i.e. when they cancel their subscription.  Needless to say, churn is bad for business.  Every company has a customer CPA (Cost Per Acquisition) so in order to replace a churned customer with a new customer, this cost must be paid.   Clearly it is cheaper for companies to keep customers than to replace them.  Churn analysis is used to attempt to answer the following questions</p>
+<ol>
+<li>Why are customers churning?</li>
+<li>Can we predict customers who will churn in the near future (and then maybe convince them to stay with us)?</li>
+<li>How long can we expect a given customer to stay with us?</li>
+</ol>
+<p>These are very important questions and if reliable answers can be obtained, they would be of great value.  We will also see that these main questions are closely linked to some other slightly different yet equally important questions such as</p>
+<ol>
+<li>What is the lifetime value of a given customer?</li>
+<li>Who are our most valuable customers and who are out least valuable customers? What accounts for these differences?</li>
+</ol>
+<h2>Question:  Can we predict which customers will churn in the near future?</h2>
+<p>Predicting which of your current customers will churn is a binary classification problem.  As it stands, this is an ill-defined problem.  This is because of the simple fact that in subscription-based services ALL CUSTOMERS WILL CANCEL EVENTUALLY!  You could have a classifier that predicts that all currently active accounts will cancel and it would be 100% correct!  But obviously this would be useless to a company.  What companies really want to know is which of the currently active accounts will cancel "soon".  This way companies can take action in an effort to prevent cancellation from occurring.  The specific preventative action that should be taken is beyond the scope of this blog post but the prediction problem itself will be explored.</p>
+<h3>Dealing with the Time Component</h3>
+<p>The first thing that you need to do is define a time period.  There is a trade-off here.  You want to know who is going to cancel as soon as possible so that you have the maximum amount of time to take preventative action. However if you predict too early, your predictions will be of lower quality.  This is because (in most cases) churn indicators become clearer the closer the customer is to his/her actual cancel date.  On the other hand, if you predict too late, your predictions will be more reliable but it will give you less time to take preventative action.  You need to decide on a good balance which most likely depends on your domain.  I can say that in the telecom domain a 2 week window is generally enough time to perform preventative action.</p>
+<p>Once you have dealt with the time component, the classification problem becomes more well-defined however there is still a bit more work that needs to be done.</p>
+<h3>Defining Positive and Negative Examples</h3>
+<p>In any classification problem you need to build a training set of positive and negative examples.  It is clear that negative examples will come from customers that have churned in the past.  However it is a bit unclear what the positive examples should be.  You might initially think that we can use the currently active accounts as positive examples.  This is problematic sinse ultimately these are the accounts we will test on so we can't really use them for training as they are.</p>
+<p>What you need to do is identify your long-time customers (they will most likely be currently active, but they could also have cancelled after using your service for a long time).  However, as previously stated, you cannot use them as they are because you are going to test on them.  You need to use the truncated versions of these examples as positive examples.  For example, if you have a long-time customer that has been active for two years, use this customer's behaviour from their first 365 days as a positive example.  In this way, you obtain positive examples of customers that you know will not cancel for a long time.  Also, testing will generally be done on an active customer's recent behaviour, so you are mitigating the risk of overfitting by training on that customer's past behaviour.</p>
+<p>Now that you know what your positive and negative examples are you must extract relevant feature from them.</p>
+<h3>Feature Extraction</h3>
+<p>The feature extraction process is the most important part of this problem and, unfortunately, also the most unsystematic.  If you have dealt with supervised learning problems before you know that feature extraction is as much an art as it is a science.  Feature extraction is very domain-specific.  In some cases the relevant features that indicate churn likelihood are obvious, in others it is less clear.  It would be wise to consult someone with good domain expertise before you decide on the features you will use.  I will list some of the features that I found to be good indicators of churn in the telecom domain.</p>
+<h4>Static Features</h4>
+<p>Static features are features that are not time-dependent.</p>
+<ul>
+<li>Age at activation date</li>
+<li>Lead source</li>
+<li>Type of phone</li>
+<li>Number of phones attached to account</li>
+<li>Location</li>
+<li>Credit card type</li>
+</ul>
+<h4>Usage-based Features</h4>
+<p>Usage-based features deal with the customer's time-dependent usage patterns.</p>
+<ul>
+<li>Date of last usage</li>
+<li>Max and min daily usage amount</li>
+<li>Average usage amount over last 30 days</li>
+<li>Average usage amount over last 30 days / overall average</li>
+<li>Number of support tickets issued</li>
+<li>Number support tickets in last 30 days / total # of support tickets</li>
+<li>Max # of days without any usage</li>
+<li>Current # of days without any usage / max # days without any usage</li>
+</ul>
+<p>However, as I said earlier, feature extraction is a very domain-specific problem so there is no guarantee that these features will be useful in your particular use case.</p>
+<h3>The Class Imbalance Problem</h3>
+<p>In almost all applications of this problem you will find that you have many more active accounts than cancelled accounts.  Therefore you will have many more positive training examples than negative training examples.  This is problematic because any classifier that predicts that no customers will churn will perform very well.  Consider the case where you apply the classifier to a set of 100 accounts - 90 that will not cancel in the next 2 weeks and 10 that will.  If the classifier predicts that all 100 will not cancel, it would have an accuracy of 90%.  Even though the classifier is very accurate, it is of little use because we need to identify these 10 accounts that are going to cancel.  This is called the class imbalance problem.</p>
+<p>There has been a fair amount of research into this problem and survey of possible solutions can be found <a href="http://marmota.dlsi.uji.es/WebBIB/papers/2007/1_GarciaTamida2007.pdf">here</a>.  I have found that over-sampling the negative examples works well.  Specifically, I used stratified sampling on the negative examples such that my final training set contains a certain percentage of negative examples.  There is another trade-off here.  The higher the percentage of negative examples, the more false negatives (incorrectly predicting that a customer will churn) you will generate.  But if the percentage is too low, you will miss accounts that will cancel.  You must decide the threshold of false negatives that you can tolerate.</p>
+<h3>Putting it All Together</h3>
+<p>Now that you have defined your positive and negative examples, extracted features and dealt with the class imbalance problem, you can finally build your model.  The particular model that you choose is up to you.  I have found that random forests perform well in most applications.  The best results generally come from an ensemble of multiple models.  Obviously you would want to perform the usual train/test set splitting, cross-validation and parameter tuning that is required to reduce overfitting.  Once your model is trained up to your standards, you will apply it to your set of currently active customers.</p>
+<p>You also want to decide how often to run this classifier.  Since the usage-based features are constantly changing, running the classifier frequently would be a good idea.  However, if you notice that no new accounts are being flagged, it might be a good idea to run it less frequently.  But if you have the capacity, there is really no downside to running it as often as possible.</p>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-7.html">Facebook Recruiting III Keyword Extraction - Part 7</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-11-24T00:00:00+01:00">
+          on&nbsp;Sun 24 November 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Parameter Tuning</h2>
+<p>Now the time has come to perform an actual out-of-sample test of our association rule algorithm.  The training data set has about 6 million rows so the association rule algorithm will be trained on 5 million rows and the remaining 1 million rows will be held out for testing.  From this we can accomplish two goals</p>
+<p>It gives us an idea of how well our algorithm will perform on the actual test set without actually having to submit anything on the Kaggle website (you are only allowed 2 submissions per day).
+It allows us to tune the parameters of our algorithm to achieve the best performance on our hold-out data set.
+However, before we start tuning parameters we should first formalize our classification algorithm.</p>
+<h3>Classification Algorithm</h3>
+<p>The classification algorithm is fairly simple.  The following pseudo-code illustrates how it works</p>
+<div class="highlight"><pre>I={}
+For r in AR:
+     if C(r)&gt;α AND supp(r)&gt;β AND r not in I:
+          I.append(r)
+</pre></div>
+
+
+<p>The input to the algorithm is the learned association rules from both the post title and post body <span class="math">\(AR\)</span>.  <span class="math">\(I\)</span> denotes the set of tags that will be predicted for the given post, so initially <span class="math">\(I\)</span> is empty.  The algorithm searches through <span class="math">\(AR\)</span> to find association rules <span class="math">\(r\)</span> with confidence above a certain threshold <span class="math">\(\alpha\)</span> and support above a certain threshold <span class="math">\(\beta\)</span>.  The tags in these association rules are then added to the set <span class="math">\(I\)</span> which become the predicted tags for this post.</p>
+<p>So we need to find the optimal parameters <span class="math">\(\alpha\)</span> and <span class="math">\(\beta\)</span>.  One way to do this is to vary these parameters and see how their values affect the test error.  The parameter values that produce the best test performance are the ones we would use.  Before we can do this, we must decide on a loss function.  Kaggle says that the loss function that submissions are scored upon is the mean F1-score loss function.  The mean F1-score loss function is defined as</p>
+<p><span class="math">\(F1=2\frac{p \cdot r}{p+r}\)</span> where <span class="math">\(p=\frac{tp}{tp+fp}\)</span> and <span class="math">\(r=\frac{tp}{tp+fn}\)</span></p>
+<p>This loss function means that both precision (<span class="math">\(p\)</span>) and recall (<span class="math">\(r\)</span>) are weighted equally so both must be optimized in order to obtain the best score. The F1-score can be written in Python code as the following</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="nf">F1_score</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span><span class="n">predicted</span><span class="p">):</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+    <span class="n">predicted</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span>
+    <span class="n">tp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span> <span class="o">&amp;</span> <span class="n">predicted</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
+    <span class="n">fn</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
+
+    <span class="k">if</span> <span class="n">tp</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+        <span class="n">precision</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fp</span><span class="p">)</span>
+        <span class="n">recall</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fn</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="mi">2</span><span class="o">*</span><span class="p">((</span><span class="n">precision</span><span class="o">*</span><span class="n">recall</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">precision</span><span class="o">+</span><span class="n">recall</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+</pre></div>
+
+
+<p>predicted is the list of tags that the classification algorithm predicts for a given post in the hold-out set and tags is the list of actual tags for that post.  These lists are then converted to Python sets so that tp, fp, and fn can be computed efficiently.</p>
+<h3>Varying the Parameters</h3>
+<p>Now that we have a cost function, we can run some tests to calibrate our parameters α and β.  As stated earlier, we split the data set into a training set and test set - mine association rules from the training set and test their performance on the test set.</p>
+<h3>Why not use cross-validation?</h3>
+<p>Usually one should use k-fold cross-validation to learn the optimal parameter values as it would give the most unbiased representation of the algorithm's performance on unseen data.  However, 5-fold cross-validation was tried initially but it became clear that validation errors for each of the 5 validation sets were very similar so taking the average would not be much different than the error of one of the validation sets.  For this reason (and the fact that each test will take 1/5th of the time), a single test set was used instead.</p>
+<h2>Results</h2>
+<p>After considering many combinations of support and confidence values, the best F1-score was found to be <strong>0.74021</strong> with confidence=0.5 and support=5.  The number 1 score was 0.81350 so I was not too far off.</p>
+<p>There were many different strategies that I wanted to try but did not have time to implement.  Here is a list of improvements/alternative strategies that I would have liked to try if I had enough time.</p>
+<ul>
+<li>About 50,000 posts in the test set were predicted to have zero tags because there were no association rules for them that fell within the acceptable threshold.  These posts were scored as zero.  However, F1-score can never be negative so any random guess of tags could only improve the score.  A naive solution would be to simply use the baseline tags (i.e. javascript c# python php java) as predictions for these posts, however I suspect that there would be a more clever way of doing this.</li>
+<li>The opposite problem also occurs in some predictions.  Some posts are predicted to have 8, 9, 10+ tags.  Given what we know from the training set and this kaggle thread, the maximum number of tags is 5 (and it is also quite rare to have that many).  This does not necessarily mean that we should cut off all predictions at 5 tags, but certainly 10+ tags is not a sensible number of tags to predict.  So I think that is very likely that our score would increase if we reduced the number of tags in these cases.</li>
+<li>I considered each post as a bag-of-words - meaning that I only cared which words appeared in the post, not their ordering.  However, I suspect that if I was able to build bigram-based association rules, I could increase the classifier performance.  For example, if a post title contains the bigram "linux server", my current classifier would look at the association rules for "linux" and "server" independently and it might be unlikely that it would predict the tag "linux-server" for either of those terms.  However, I suspect that a bigram association rule between "linux server" and "linux-server" would be much more likely.  The trade-off is that it would be much more difficult to mine bigram association rules on a single computer in terms of memory capacity.</li>
+<li>Another strategy would be to abandon the association rule classification strategy altogether and consider a more classical method.  One such method would be to create a very sparse binary valued matrix from the training set where each feature is a word that could appear in a post (assign it a value of 1 if it does, 0 if is doesn't).  Then use well-known classification methods to model the relationship between the input matrix and the output tags.  However, I would imagine that this could present problems due to the size and sparsity of this matrix.</li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-6.html">Facebook Recruiting III Keyword Extraction - Part 6</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-10-27T00:00:00+02:00">
+          on&nbsp;Sun 27 October 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Test Examples</h2>
+<p>In this post we will be testing the association rule algorithm on a few posts from the training set.  Usually it is bad practice to test on your training set but this is just for illustrative purposes (since the training set is so large and we are only testing on a few examples, it should not make a significant difference anyway).</p>
+<h3>Example 1:</h3>
+<p><strong>Title:</strong> php script to echo a post</p>
+<p><strong>Body:</strong></p>
+<div class="highlight"><pre><span class="nt">&lt;p&gt;</span>Could someone help with a simple PHP script to echo the whole message received with an HTTPPOST.<span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>I am sending a string from an android app using HTTPPOST and would like to receive as a response the message received by the POST at the server.<span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>The script that I am using will only echo name value pairs <span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;pre&gt;&lt;code&gt;</span>echo $_POST(&#39;data&#39;) <span class="nt">&lt;/code&gt;&lt;/pre&gt;</span> <span class="nt">&lt;p&gt;</span>works when I post form data, but have not figured out how to echo a string. <span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>Thanks<span class="nt">&lt;/p&gt;</span>
+</pre></div>
+
+
+<p><strong>Tags:</strong> php android</p>
+<p>The most likely association rules for the post title are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>php</td>
+<td>php</td>
+<td>158454</td>
+<td>0.9415</td>
+</tr>
+<tr>
+<td>echo</td>
+<td>php</td>
+<td>2237</td>
+<td>0.6268</td>
+</tr>
+<tr>
+<td>echo</td>
+<td>echo</td>
+<td>820</td>
+<td>0.2298</td>
+</tr>
+<tr>
+<td>post</td>
+<td>php</td>
+<td>7042</td>
+<td>0.1817</td>
+</tr>
+<tr>
+<td>script</td>
+<td>php</td>
+<td>8652</td>
+<td>0.1631</td>
+</tr>
+<tr>
+<td>post</td>
+<td>post</td>
+<td>6124</td>
+<td>0.1579</td>
+</tr>
+<tr>
+<td>script</td>
+<td>javascript</td>
+<td>6657</td>
+<td>0.1255</td>
+</tr>
+<tr>
+<td>script</td>
+<td>bash</td>
+<td>6642</td>
+<td>0.1233</td>
+</tr>
+</tbody>
+</table>
+<p>As you can see, the most likely association rule is <span class="math">\(php \rightarrow php\)</span>.  This is good since "php" is indeed a tag for this post.  The other tag for this post is "android" however there are no association rules listed that correspond to this tag.  This is not necessarily bad news because the title "php script to echo a post" does not even suggest that this post relates to "android" at all.  Perhaps the android-related content is in the post body...</p>
+<p>The most likely association rules for the post body are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>android</td>
+<td>android</td>
+<td>200854</td>
+<td>0.8938</td>
+</tr>
+<tr>
+<td>php</td>
+<td>php</td>
+<td>290432</td>
+<td>0.7563</td>
+</tr>
+<tr>
+<td>echo</td>
+<td>php</td>
+<td>13577</td>
+<td>0.5538</td>
+</tr>
+<tr>
+<td>httppost</td>
+<td>android</td>
+<td>588</td>
+<td>0.4273</td>
+</tr>
+<tr>
+<td>httppost</td>
+<td>asp.net-mvc</td>
+<td>272</td>
+<td>0.1977</td>
+</tr>
+<tr>
+<td>app</td>
+<td>android</td>
+<td>128830</td>
+<td>0.1933</td>
+</tr>
+<tr>
+<td>script</td>
+<td>php</td>
+<td>73170</td>
+<td>0.1926</td>
+</tr>
+<tr>
+<td>httppost</td>
+<td>java</td>
+<td>217</td>
+<td>0.1577</td>
+</tr>
+</tbody>
+</table>
+<p>As suspected, the android-related content was in the post body as shown by the most likely association rule <span class="math">\(android \rightarrow android\)</span>.  So the two most likely association rules correspond to the correct tags of "php" and "android" with probabilities 0.9415 and 0.8938 respectively.  The most likely incorrect tag is "echo" with probability 0.2298.</p>
+<h3>Example 2:</h3>
+<p><strong>Title:</strong> Can output of a method be used to autowire another bean?</p>
+<p><strong>Body:</strong></p>
+<div class="highlight"><pre><span class="nt">&lt;p&gt;</span>I have a following class <span class="nt">&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</span>public class Customer {private String firstName;private String lastName;public void setFirstName(String fName) {this.firstName = fName;}public void setLastName(String lName) {this.lastName = lName;}};<span class="nt">&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;</span>I&#39;ve another class that does the following.<span class="nt">&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</span>public class NameGenerator {public String generateName() {return &quot;Zee Zee&quot;;}};<span class="nt">&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;</span>Is it possible to set the name of customer (inject name into customer) without having passing NameGenerator bean. Rather, I&#39;m expecting to inject the output of <span class="nt">&lt;code&gt;</span>generateName()<span class="nt">&lt;/code&gt;</span> method?<span class="nt">&lt;/p&gt;&lt;p&gt;</span>This question is for sake of understanding if it can or cannot be done and does not necessarily delve into best practices.<span class="nt">&lt;/p&gt;</span>
+</pre></div>
+
+
+<p><strong>Tags:</strong> java spring dependency-injection</p>
+<p>The most likely association rules for the post title are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>autowire</td>
+<td>spring</td>
+<td>157</td>
+<td>0.9235</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>java</td>
+<td>102</td>
+<td>0.6000</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>java</td>
+<td>2236</td>
+<td>0.4529</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>autowired</td>
+<td>63</td>
+<td>0.3706</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>spring</td>
+<td>1532</td>
+<td>0.3103</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>jsf</td>
+<td>1157</td>
+<td>0.2343</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>spring-mvc</td>
+<td>31</td>
+<td>0.1824</td>
+</tr>
+<tr>
+<td>autowire</td>
+<td>autowire</td>
+<td>30</td>
+<td>0.1765</td>
+</tr>
+</tbody>
+</table>
+<p>The most likely association rules for the post body are</p>
+<table>
+<thead>
+<tr>
+<th>Title Word</th>
+<th>Tag Word</th>
+<th>Support</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bean</td>
+<td>java</td>
+<td>12812</td>
+<td>0.4382</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>spring</td>
+<td>8480</td>
+<td>0.2900</td>
+</tr>
+<tr>
+<td>bean</td>
+<td>jsf</td>
+<td>7165</td>
+<td>0.2451</td>
+</tr>
+<tr>
+<td>class</td>
+<td>java</td>
+<td>137473</td>
+<td>0.1859</td>
+</tr>
+<tr>
+<td>method</td>
+<td>c#</td>
+<td>109780</td>
+<td>0.1682</td>
+</tr>
+<tr>
+<td>class</td>
+<td>c#</td>
+<td>116603</td>
+<td>0.1576</td>
+</tr>
+<tr>
+<td>inject</td>
+<td>java</td>
+<td>1788</td>
+<td>0.1522</td>
+</tr>
+<tr>
+<td>inject</td>
+<td>dependency-injection</td>
+<td>1760</td>
+<td>0.1498</td>
+</tr>
+</tbody>
+</table>
+<p>In this example, the association rule algorithm does not work as well.  The top two most likely association rules do indeed correspond to the correct tags of "spring" and "java", however the third correct tag "dependency-injection" has a likelihood of only 0.1498.  Therefore, several incorrect tags such as "autowired", "jsf", "spring-mvc", "autowire",  and "c#" are more likely than the correct tag of "dependency-injection".</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-5.html">Facebook Recruiting III Keyword Extraction - Part 5</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-10-05T00:00:00+02:00">
+          on&nbsp;Sat 05 October 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Implementing the association rule algorithm</h2>
+<p>As stated earlier, words in post titles and words in post bodies are fundamentally different with respect to their influence on the tags that are assigned to that post.  So for this reason, two sets of association rules will be generated - title-tag association rules and body-tag association rules.</p>
+<p>Since the dataset is so large, steps must be taken to make sure that we don't run out of RAM. We can do this by importing the dataset line-by-line such that only one line of the dataset is held in main memory at any one time before it is exported to another csv file.  The association rule algorithm can be implemented in the following steps.</p>
+<ol>
+<li><strong>Find All Combinations:</strong>  The first step is to find all combinations of words (title or body words depending on which set of rules you are finding) and tags that appear in the same posts.  The list of all combinations will be huge! Mine came to about 13GB which would definitely generate a memory error if you were to hold it all in main memory, so each combination must be exported sequentially into another csv file.</li>
+<li><strong>Count All Combinations:</strong>  Now you must import that huge list of all combinations and count the number of times each distinct combination appears in the list.  The counts must be held in main memory, but since you are only holding the counts of each distinct combination, it will be much smaller than 13GB (mine came to about 1.5GB).  Now you have <span class="math">\(|Co(A,B)|\)</span> for all words <span class="math">\(A\)</span> and tags <span class="math">\(B\)</span>!</li>
+<li><strong>Count Overall Word Occurrences:</strong> Next, in order to calculate the required probabilities, we need to count the number of occurrences of each word in the set of post titles (or bodies).</li>
+<li><strong>Calculate Probabilities and Save as Dictionary:</strong>  Now, since we have the word counts and the co-occurrence counts, we can calculate the required probability <span class="math">\(P(B|A)\)</span> for each combination.</li>
+</ol>
+<h3>Code snippets</h3>
+<p>Here are a few snippets of python code to give us a better understanding of how the above steps can be implemented.  The following snippet finds all combinations of words and tags</p>
+<div class="highlight"><pre><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;input_file.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">r</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;output_file.csv&quot;</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+     <span class="n">rdr</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rdr</span><span class="p">:</span>
+          <span class="n">a</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+          <span class="n">b</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+          <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span> <span class="n">b</span><span class="o">.</span><span class="n">split</span><span class="p">()):</span>
+               <span class="n">w</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;{},{}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</pre></div>
+
+
+<p>where a is a string containing the title (or body) of a post and b is a string containing the list of tags for that post.  Also, the product() function is part of the python itertools package which would need to be imported.
+This next snippet shows how the combinations are then counted.</p>
+<div class="highlight"><pre><span class="n">counter</span><span class="o">=</span><span class="p">{}</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;output_file.csv&quot;</span><span class="p">,</span><span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_name</span><span class="p">:</span>
+     <span class="n">reader</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
+          <span class="n">pair</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+          <span class="k">if</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">counter</span><span class="p">:</span>
+               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">+=</span><span class="mi">1</span>
+          <span class="k">else</span><span class="p">:</span>
+               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+
+
+<p>where counter is a dictionary whose key is a word/tag pair and its value is the count of the number of times they co-occur.  All of the other steps in the algorithm can be implemented by modifying these two code snippets in some way.</p>
+<h3>Some results</h3>
+<p>Here are some examples of probability distributions <span class="math">\(P(B|A)\)</span> for different words <span class="math">\(A\)</span>.</p>
+<p>The first of the following plots shows the top 10 most likely tags when the word "C++" appears in a post title and the second plot shows the top 10 most likely tags when "C++" appears in a post body.</p>
+<p><img alt="alt text" src="images/cplusplus3.png" title="C++ title" /> 
+<img alt="alt text" src="images/cplusplus_body1.png" title="C++ body" /></p>
+<p>As one might expect, the most likely tag (by a large margin) is "c++".  It is also interesting to see that the likelihoods are significantly larger for when "C++" appears in the title.  This makes sense intuitively because titles are short and succinct and therefore each title word should generally be more descriptive of the overall post than a word in the post body.</p>
+<p>The next set of plot is for the word "sql".</p>
+<p><img alt="alt text" src="images/sql.png" title="SQL title" /> 
+<img alt="alt text" src="images/sql_body.png" title="SQL body" /></p>
+<p>What is interesting about these tag likelihoods is that there is not a clear winner.  The tags "sql" and "sql-server" are both quite likely.</p>
+<p>The next set of plot is for the more obscure word "geodesic".</p>
+<p><img alt="alt text" src="images/geodesic3.png" title="Geodesic title" /> 
+<img alt="alt text" src="images/geodesic_body.png" title="Geodesic body" /></p>
+<p>There are several interesting differences with these plots.  The first is that the actual post word "geodesic" is not in the top ten most likely tags (it is probably not even in the set of possible tags).  Another difference is that the tag likelihoods are actually larger when "geodesic" appears in the post body.  This is probably because "geodesic" is a more obscure word than "C++" and "sql".</p>
+<p>The next step is to use these association rules to make predictions.  Stay tuned...</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+ 
+<div class="paginator">
+            <div class="navButton"> <a href="/author/alex-minnaar.html" >Prev</a></div>
+    <div class="navButton">Page 2 / 3</div>
+        <div class="navButton"><a href="/author/alex-minnaar3.html" >Next</a></div>
+</div>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

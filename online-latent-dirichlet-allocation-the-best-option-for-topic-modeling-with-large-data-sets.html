@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory  </a><br /><br />
+          </div>
+
+</div>
+
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html" rel="bookmark"
+               title="Permalink to Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets</a></h1>
+
+        </header>
+
+        <div class="entry-content">
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-10-14T00:00:00+02:00">
+          on&nbsp;Tue 14 October 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info -->          <h2>The Problem with Latent Dirichlet Allocation and Large Data Sets</h2>
+<p>By now it has become very clear that Latent Dirichlet Allocation (LDA) has a variety of valuable, real-world use cases.  However, most real-world use cases involve large volumes of data which can be problematic for LDA.  This is because both of the traditional implementations of LDA (variational inference and collapsed Gibbs sampling) require the entire corpus (or some encoding of it) to be loaded into main memory.  Obviously, if you are working with a single machine and a data set that is sufficiently large, this can be infeasible.  One solution is to parallelize the algorithm and scale out until you have the required resources.  However, this presents an entire new set of problems - acquiring a cluster of machines, modifying your LDA code such that it can work in a MapReduce framework, etc.  A much better solution would be to segment your large data set into small batches and sequentially read each of these batches into main memory and update your LDA model as you go in an online fashion.  This way you are only keeping a small fraction of your large data set in main memory at any given time.  Furthermore, consider a scenario where your corpus is constantly growing such as an online discussion forum.  As your corpus grows you want to see how the topics are changing.  With traditional variational inference you would have to rerun the entire batch algorithm with the old data and the new data but it would be much more efficient to simply update your model with only the new data.  In their paper <a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CDEQFjAA&amp;url=https%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiBach2010b.pdf&amp;ei=b4bvU-2_K433yQSbh4LoCw&amp;usg=AFQjCNHLmU8Gk_P4usBj2QcGcaolw87w4w&amp;sig2=cbFKirN-0jWvPj-mCqRP_g&amp;bvm=bv.73231344,d.aWw">Online Learning for Latent Dirichlet Allocation</a>, Blei et al. present an algorithm for achieving this kind of functionality.  This blog post aims to give a summary of this paper and also show some results from my own Scala implementation.</p>
+<h2>Variational Inference vs Stochastic Variational Inference</h2>
+<p>Let's start off with a very general graphical model that includes observations, local hidden variables, and global hidden variables.</p>
+<p><img alt="general graphical model" src="images/general_graphical_model.png" /> </p>
+<p>In the above graphical model, there are <span class="math">\(N\)</span> observations <span class="math">\(x_{1:N}\)</span> and one local hidden variable for each observation <span class="math">\(z_{1:N}\)</span>.  There are also global hidden variables <span class="math">\(\beta\)</span> with a known prior <span class="math">\(\alpha\)</span>.  I will first compare variation inference with stochastic variational inference in the context of this graphical model because it can be generalized to a variety of different graphical models with local and global hidden variables e.g. the LDA model, Gaussian mixture models, hidden Markov models and many more.</p>
+<p>The joint distribution of this graphical model is</p>
+<p><span class="math">\(p(x,z,\beta | \alpha)=p(\beta | \alpha)\prod_{n=1}^Np(x_n,z_n | \beta)\)</span></p>
+<p>Also, our assumption that <span class="math">\(\beta\)</span> are the global parameters and <span class="math">\(z_n\)</span> are the local parameters is formalized by the fact that the observation <span class="math">\(x_n\)</span> and the corresponding local variable <span class="math">\(z_n\)</span> are conditionally independent given the global variables <span class="math">\(\beta\)</span> i.e.</p>
+<p><span class="math">\(p(x_n,z_n|x_{-n},z_{-n},\beta,\alpha)=p(x_n,z_n|\beta,\alpha)\)</span></p>
+<p>Another assumption that we make in this model is that the conditional distributions of the hidden variables given the observations and other hidden variables (also called the complete conditionals) are in the exponential family which means they take the general form</p>
+<p><span class="math">\(p(\beta | x,z,\alpha)=h(\beta)\exp(\eta_g (x,z,\alpha)^Tt(\beta)-a_g(\eta_g(x,z,\alpha)))\)</span></p>
+<p><span class="math">\(p(z_{nj}|x_n,z_{n,-j},\beta)=h(z_{nj})\exp(\eta_l(x_n,z_{n,-j},\beta)^Tt(z_{nj})-\alpha_l(\eta_l(x_n,z_{n,-j},\beta)))\)</span></p>
+<p>Where <span class="math">\(h(.)\)</span> is called the base measure, <span class="math">\(a(.)\)</span> is called the log-normalizer, <span class="math">\(\eta(.)\)</span> is called the natural parameter, and <span class="math">\(t(.)\)</span> is called the sufficient statistics.  Furthermore, we also assume that the prior distribution over <span class="math">\(\beta\)</span> is part of the exponential family.</p>
+<p><span class="math">\(p(\beta)=h(\beta)\exp(\alpha^Tt(\beta)-a_g(\alpha))\)</span></p>
+<p>The main goal is to compute the posterior distribution of the hidden variables given the observed variables</p>
+<p>
+<div class="math">$$p(\beta,z|x)=\frac{p(x,z,\beta)}{\int p(x,z,\beta)dz d \beta}$$</div>
+</p>
+<p>Unfortunately, the denominator <span class="math">\(\int p(x,z,\beta)dz d \beta\)</span> is intractable to compute so we must use approximate inference techniques such as variational inference.</p>
+<h3>Variational Inference</h3>
+<p>Variational inference turns the inference problem into an optimization problem.  A new distribution over the hidden variables <span class="math">\(q(z,\beta)\)</span> (called the variational distribution) is introduced.  This new distribution has properties such that it can be efficiently computed.  The variational distribution is a function of a set of free parameters that are optimized such that the variational distribution is as close as possible to the actual target posterior distribution where closeness is measured in terms of KL divergence.  Minimizing the KL divergence between the variational distribution and the target posterior is equivalent to maximizing the evidence lower bound (ELBO) (proof not shown here) which is</p>
+<p>
+<div class="math">$$\mathscr{L}(q)=E_q[\log p(x,z,\beta)]-E_q[\log q(z,\beta)]$$</div>
+</p>
+<p>As stated earlier, the variational distribution has the property that it can be efficiently computed.  This is done by making each hidden variable independent of each other.</p>
+<p><span class="math">\(q(z,\beta)=q(\beta|\lambda)\prod_{n=1}^N \prod_{j=1}^J q(z_{nj}|\phi_{nj})\)</span></p>
+<p>Furthermore, each hidden variable is governed by its own variational parameter so the variational parameters <span class="math">\(\lambda\)</span> governs the global variables <span class="math">\(\beta\)</span> and the variational parameters <span class="math">\(\phi_n\)</span> govern the local variables <span class="math">\(z_n\)</span>.  <span class="math">\(q(\beta | \lambda)\)</span> and <span class="math">\(q(z_{nj} | \phi_{nj})\)</span> take the same form as the complete conditionals <span class="math">\(p(\beta | x,z,\alpha)\)</span> and <span class="math">\(p(z_{nj}|x_n,z_{n,-j},\beta)\)</span>, but the natural parameters are now <span class="math">\(\lambda\)</span> and <span class="math">\(\phi_{nj}\)</span>, respectively to give</p>
+<p><span class="math">\(q(\beta | \lambda)=h(\beta)\exp(\lambda^Tt(\beta)-a_g(\lambda))\)</span></p>
+<p><span class="math">\(q(z_{nj}|\phi_{nj})=h(z_{nj})\exp(\phi_{nj}^Tt(z_{nj})-a_l(\phi_{nj}))\)</span></p>
+<p>We maximize the ELBO objective function with a coordinate ascent procedure.  We find its gradient with respect to the global variational parameter <span class="math">\(\lambda\)</span> and find the value of <span class="math">\(\lambda\)</span> that sets the gradient to zero.  We do the same thing for the local parameters <span class="math">\(\phi_{n}\)</span>.  We iterate between these updates until we converge to the maximum of the ELBO.  The updates are given without proof, but the general procedure is to write the ELBO in terms of parameter of interest (either <span class="math">\(\lambda\)</span> or <span class="math">\(\phi_n\)</span>) then take the gradient and set it to zero.</p>
+<p>
+<div class="math">$$\lambda=E_q[\eta_g(x,z,\alpha)]$$</div>
+</p>
+<p>
+<div class="math">$$\phi_{nj}=E_q[\eta_l(x_n,z_{n,-j},\beta)]$$</div>
+</p>
+<p>Therefore the updates of each variational parameter are equal to the expected value of the natural parameters of the complete conditionals.  The complete coordinate ascent algorithm is given below.</p>
+<p><img alt="variational inference" src="images/variational_inference.png" /> </p>
+<p>As you can see, in the local parameter update (steps 3 and 4), we have to iterate over every data point in the data set which is computationally expensive and (as we will see later) not necessary.</p>
+<h3>Stochastic Variational Inference</h3>
+<p>Stochastic variational inference uses a stochastic optimization technique to sequentially maximize the ELBO using unbiased samples from the data set.  Updates are performed with the following formula</p>
+<p><span class="math">\(\lambda^{(t)}=\lambda^{(t-1)}+\rho_tb_t(\lambda^{(t-1)})\)</span></p>
+<p>where <span class="math">\(b_t\)</span> is a noisy (but unbiased) gradient of the objective function obtained from a subsample of the data set.  If the step size <span class="math">\(\rho_t\)</span> satisfies the following constraints</p>
+<p><span class="math">\(\sum \rho_t=\infty\)</span>,   <span class="math">\(\sum \rho_t^2 &lt; \infty\)</span></p>
+<p>then it is guaranteed to converge to the global optimum <span class="math">\(\lambda^*\)</span> if the objective function is convex, or a local optima if it is not convex.  Now let's look at how this noisy gradient can be computed for a single data point.  First we write the ELBO in terms of a global term and a sum of local terms.</p>
+<p><span class="math">\(\mathcal{L}(\lambda)=E_q[\log p(\beta)]-E_q[\log q(\beta)]+\sum^N_{n=1}\max(E_q[\log p(x_n,z_n | \beta)]-E_q[\log q(z_n)])\)</span></p>
+<p>Consider a randomly chosen data point index <span class="math">\(I\)</span> sampled from <span class="math">\(Unif(1,...,N)\)</span>. For this data point <span class="math">\(x_{I}\)</span> let us define</p>
+<p><span class="math">\(\mathcal{L}_I(\lambda)=E_q[\log p(\beta)]-E_q[\log q(\beta)]+N \max(E_q[\log p(x_I,z_I | \beta)]-E_q[\log q(z_I)])\)</span></p>
+<p>This is equivalent to the original ELBO if the entire data set was made up of <span class="math">\(x_{I}\)</span>.  There are two important facts that one must understand about <span class="math">\(\mathcal{L}_I(\lambda)\)</span></p>
+<p>The expectation of <span class="math">\(\mathcal{L}_I(\lambda)\)</span> with respect to the data point <span class="math">\(x_{I}\)</span> is equivalent to the original ELBO.
+As a consequence, the gradient of <span class="math">\(\mathcal{L}_I(\lambda)\)</span> can be thought of as a noisy gradient of the original ELBO because it is unbiased.
+However, we do not want to take the usual gradient of <span class="math">\(\mathcal{L}_I(\lambda)\)</span>.  Instead we want to take the natural gradient.  The usual gradient assumes that the parameter space is Euclidean but it turns out that it is better to assume that it has a Riemannian metric structure (in the context of minimizing KL divergence) which is what the natural gradient does.  A full explanation of the natural gradient is beyond the scope of this blog post but this paper by Amari gives a good overview.  The The natural gradient of  <span class="math">\(\mathcal{L}_I(\lambda)\)</span> is</p>
+<p><span class="math">\(\nabla \mathcal{L}_i=E_q[\eta_g(x_i^{(N)},z_i^{(N)},\alpha)]-\lambda\)</span></p>
+<p>and setting this gradient to zero gives the update</p>
+<p>
+<div class="math">$$\lambda=E_q[\eta_g(x_i^{(N)},z_i^{(N)},\alpha)]$$</div>
+</p>
+<p>The full algorithm is shown below</p>
+<p><img alt="stochastic variational" src="images/stochastic_variational.png" /> </p>
+<p>The procedure consists of sampling a single data point then finding the optimal local parameters for that data point then updating the global  variational parameters under the assumption that the entire dataset consisted of <span class="math">\(N\)</span> replicas of that data point.  Then this "intermediate" global variational parameter is combined with the previous "overall" global parameter via a weighted average to produce a new "overall" global parameter.  In this way, the global parameters can be updated after each sample is seen, rather than once after each iteration over the entire data set as in traditional variational inference (however, in pactice "mini-batches" of data points are used rather than a single point).  Now let's finally see how we can apply stochastic variational inference to Latent Dirichlet Allocation to get a scalable online learning algorithm.</p>
+<h2>Stochastic Variational Inference and LDA</h2>
+<p>Topic models aim to uncover the hidden thematic coherent topics that exist in a corpus of documents.  The most popular topic model is Latent Dirichlet Allocation (LDA).  In LDA, documents are thought of as distributions over topics and the topics themselves are distributions over words.  The graphical model for LDA can be thought of as a special case of the general graphical model shown earlier.  In the case of LDA, the global parameters are the topic distributions <span class="math">\(\beta\)</span>  which all documents depend on and the local parameters are the document-topic proportions <span class="math">\(\theta\)</span> which are independent between documents and <span class="math">\(Z\)</span> the topic assignments for each word in the document. So, in this context, "local" refers to document-specific variables and "global" refers to corpus-specific variables. The observed variables are the words that appear in each document (in bag-of-words format).  LDA is explained in greater detail in my previous blog post on the subject but here is the graphical model as a reminder.</p>
+<p><img alt="lda graphical model" src="images/smoothed_lda.png" /> </p>
+<p>In terms of notation, let's assume there are <span class="math">\(N\)</span> unique words in the vocabulary, <span class="math">\(D\)</span> documents in the corpus, and <span class="math">\(K\)</span> topics.  The next step is defining the complete conditionals for the LDA model (i.e. the distributions of each variable given all of the other variables both hidden and observed).  The complete conditionals for the local topic assignments <span class="math">\(Z\)</span>, the local topic proportions <span class="math">\(\theta\)</span>, and global topic distributions <span class="math">\(\beta\)</span> are</p>
+<p><span class="math">\(p(z_{dn} | \theta_d,\phi_{1:K},w_{dn}) \propto \exp(\log \theta_{dk} + \log \beta_{k,w_{dn}})\)</span></p>
+<p><span class="math">\(p(\theta_d | z_d)=Dirichlet(\alpha+\sum^N_{n=1}z_{dn})\)</span></p>
+<p><span class="math">\(p(\beta_k | z,w)=Dirichlet(\eta +\sum^D_{d=1} \sum^N_{n=1}z^k_{dn}w_{dn})\)</span></p>
+<p>where <span class="math">\(d\)</span> is the document index in the corpus, <span class="math">\(n\)</span> is the word index in the vocabulary, and <span class="math">\(k\)</span> is the topic index.  As you can see, the complete conditionals of the local variables only depend on other local variables from the same local context (i.e. the same document) and the global variables, they do not depend on local variables from other documents.  As per mean-field variational inference, the variational distributions for these variables take the same form as their complete conditionals, that is</p>
+<p><span class="math">\(q(z_{dn})=Multinomial(\phi_{dn})\)</span></p>
+<p><span class="math">\(q(\theta_d)=Dirichlet(\gamma_d)\)</span></p>
+<p><span class="math">\(q(\beta_k)=Dirichlet(\lambda_k)\)</span></p>
+<p>Next we find the updates for each of these variational parameters by taking the expectation of the natural parameters of the complete conditionals which are</p>
+<p>
+<div class="math">$$\phi^k_{dn}=\exp(\Psi(\gamma_{dk})+\Psi(\lambda_{k,w_{dn}})-\Psi(\sum_v \lambda_{kv}))$$</div>
+</p>
+<p>
+<div class="math">$$\gamma_d=\alpha + \sum^N_{n=1}\phi_{dn}$$</div>
+</p>
+<p>
+<div class="math">$$\lambda_k=\beta+\sum^D_{d=1} \sum^N_{n=1}\phi^k_{dn}w_{dn}$$</div>
+</p>
+<p>Now let's use the procedure mapped out in the stochastic variational inference algorithm which is to first randomly sample a document from the corpus then update the local variational parameters <span class="math">\(\phi\)</span> (the topic assignments for each word) and <span class="math">\(\gamma\)</span> (the topic proportions for the document) for this document.  Then we update the variational parameters for the global topic distribution for that sampled document <span class="math">\(\lambda\)</span>.  Then we merge the global parameter for the sampled document with the overall global parameter (with an update weighted by <span class="math">\(\rho_t\)</span>).  We repeat this procedure until we think that convergence has occurred.  This procedure is better illustrated below.</p>
+<p><img alt="stochastic variational inference LDA" src="images/svi_lda.png" /> </p>
+<h2>Experimental Results</h2>
+<p>Scala code that implements stochastic variational inference for LDA can be found in this github repo (warning! experimental so use at your own risk).  In this experiment, we are using the NIPS dataset which consists of the abstracts of 1,736 NIPS papers however this algorithm could handle a much larger data set than this.  The following Scala code shows how we run this experiment.</p>
+<div class="highlight"><pre><span class="c1">//set location of directory containing data</span>
+ <span class="k">val</span> <span class="n">docDirectory</span> <span class="k">=</span> <span class="s">&quot;NIPS_dataset/&quot;</span>
+
+<span class="c1">//create vocabulary from data with minimum frequency cutoff of 10</span>
+ <span class="k">val</span> <span class="n">testVocab</span> <span class="k">=</span> <span class="nc">CountVocab</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">,</span> <span class="mi">10</span><span class="o">).</span><span class="n">getVocabulary</span>
+
+<span class="c1">//create a corpus object that can be streamed into online LDA model</span>
+ <span class="k">val</span> <span class="n">testCorpus</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">StreamingCorpus</span><span class="o">(</span><span class="n">testVocab</span><span class="o">,</span> <span class="mi">5</span><span class="o">,</span> <span class="n">docDirectory</span><span class="o">)</span>
+
+<span class="c1">//create online LDA model object with 5 topics, a decay of 0.5 and 1736 documents</span>
+<span class="k">val</span> <span class="n">oldaTest</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">OnlineLDA</span><span class="o">(</span><span class="n">testCorpus</span><span class="o">,</span> <span class="mi">5</span><span class="o">,</span> <span class="mf">0.5</span><span class="o">,</span> <span class="mi">1736</span><span class="o">)</span>
+
+<span class="c1">//learn the model</span>
+ <span class="n">oldaTest</span><span class="o">.</span><span class="n">inference</span><span class="o">()</span>
+
+<span class="c1">//show the topics by displaying the 10 most probable words in each topic</span>
+ <span class="n">oldaTest</span><span class="o">.</span><span class="n">printTopics</span><span class="o">(</span><span class="mi">10</span><span class="o">)</span>
+</pre></div>
+
+
+<p>The resulting topics are shown below</p>
+<div class="highlight"><pre>Topic 1: state, learning, reinforcement, policy, action, control, actions, states, controller, robot
+
+Topic 2: recognition, speech, training, word, classifier, classification, classifiers, tree, words, hmm
+
+Topic 3: cells, neurons, cell, neuron, visual, response, figure, synaptic, model, activity
+
+Topic 4: network, learning, model, neural, data, networks, input, set, figure
+
+Topic 5: disparity, binding, similarity, protein, structural, clause, instruction, energy, structure, spin
+</pre></div>
+
+
+<p>If you have some background knowledge in the machine learning domain you can see that these five topics are both distinct and thematically coherent.  The topics appear to describe five different fields of machine learning. Topic 1 seems to describe <a href="http://en.wikipedia.org/wiki/Reinforcement_learning">reinforcement learning</a>, Topic 2 seems to describe <a href="http://en.wikipedia.org/wiki/Speech_recognition">speech recognition</a>, Topic 3 seems to describe <a href="http://en.wikipedia.org/wiki/Computational_neuroscience">neuroscience</a> in general, Topic 4 seems to describe <a href="http://en.wikipedia.org/wiki/Artificial_neural_network">neural networks</a>, and finally Topic 5 seems to describe the field of <a href="http://en.wikipedia.org/wiki/Bioinformatics">bioinformatics</a>.  Some of the topics contain redundant words but this can be reduced by preprocessing the vocabulary (eg. word stemming).</p>
+<h2>TL;DR</h2>
+<ul>
+<li>In traditional variational inference for LDA (and variational inference in general) we must iterate through the entire data set before we can update the global parameters.  This is slow and memory intensive.  It also turns out that it is unnecessary because the entire dataset contains redundant information - instead we can iteratively update our global parameters based on small samples from the data set.  This is much less memory intensive.</li>
+<li>In terms of LDA, this means that we can iteratively update our model by learning sequentially from small mini-batches of documents taken from the corpus.  This means that at any given time, we only need to keep a small mini-batch of documents in memory which means that we can scale our LDA model to an arbitrarily large corpus!</li>
+<li>Take a look at my <a href="https://github.com/alexminnaar/topic-models">experimental Scala</a> code that implements this.</li>
+</ul>
+<h2>References</h2>
+<ul>
+<li><a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CB8QFjAA&amp;url=https%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiBach2010b.pdf&amp;ei=Py88VJfcPIaeyASvkIDoCg&amp;usg=AFQjCNHLmU8Gk_P4usBj2QcGcaolw87w4w&amp;sig2=9dw5H6mIdznjjumz2nCY1g&amp;bvm=bv.77161500,d.aWw">Online Learning for Latent Dirichlet Allocation.  Hoffman, Blei, Bach.</a></li>
+<li><a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CCQQFjAA&amp;url=http%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiWangPaisley2013.pdf&amp;ei=ci88VIuwKof5yAS2i4II&amp;usg=AFQjCNFDdMC1UFSKbIMPm8PSFWsuqnl4qg&amp;sig2=wxaruB5M5pLC5Tc_3QgxrA&amp;bvm=bv.77161500,d.aWw">Stochastic Variational Inference. Hoffman, Blei, Wang, Paisley.</a></li>
+<li><a href="http://msc-ai-thesis-christiaan-meijer.googlecode.com/svn-history/trunk/Literature/Amari%20-%20Natural%20Gradient%20works%20efficiently%20in%20learning.pdf">Natural Gradient Works Efficiently in Learning. Amari.</a></li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+        </div><!-- /.entry-content -->
+        <div class="comments">
+
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
+
+      </article>
+    </div>
+</section>
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>
