@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-        <title>Alex Minnaar's Blog - Machine Learning, Data Science and Software Engineering - Software-Engineering</title>
+        <title>Building a Distributed Binary Search Tree with Akka</title>
         <meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
@@ -60,14 +60,17 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
-        
-        
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/building-a-distributed-binary-search-tree-with-akka.html" rel="bookmark"
+               title="Permalink to Building a Distributed Binary Search Tree with Akka">Building a Distributed Binary Search Tree with Akka</a></h1>
 
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a></h1>
+        </header>
+
+        <div class="entry-content">
 <div class="post-info">
 	<ul>
         <li class="vcard author">
@@ -79,7 +82,7 @@ Machine Learning at University College London. Natural language processing at Ve
 
 	</ul>
 <p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
-</div><!-- /.post-info --><p>In this blog post I will descibe an interesting Akka mini-project that I came across which helped me gain a deeper understanding of Akka's asynchronous actor model.  In this project we use Akka to build a distributed binary search tree where each node in the tree is an actor which allows it to be a completely asynchronous, concurrent, and distributed version of the traditional data structure.  But before we get into the Akka stuff, it would be helpful to remind ourselves of some of the basic properties of a binary search tree.</p>
+</div><!-- /.post-info -->          <p>In this blog post I will descibe an interesting Akka mini-project that I came across which helped me gain a deeper understanding of Akka's asynchronous actor model.  In this project we use Akka to build a distributed binary search tree where each node in the tree is an actor which allows it to be a completely asynchronous, concurrent, and distributed version of the traditional data structure.  But before we get into the Akka stuff, it would be helpful to remind ourselves of some of the basic properties of a binary search tree.</p>
 <h2>Binary Search Tree Basics</h2>
 <p>A binary search tree is a tree-based data structure with the following properites</p>
 <ol>
@@ -322,227 +325,23 @@ Machine Learning at University College London. Natural language processing at Ve
 <li><a href="https://www.coursera.org/course/reactive">Principles of Reactive Programming Coursera Course</a></li>
 <li><a href="https://github.com/alexminnaar/ActorBinaryTree">GitHub repository</a> for the code used in this post.</li>
 </ul>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
+        </div><!-- /.entry-content -->
+        <div class="comments">
 
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-12-27T00:00:00+01:00">
-          on&nbsp;Sat 27 December 2014
-        </li>
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "building-a-distributed-binary-search-tree-with-akka.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
 
-	</ul>
-<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
-</div><!-- /.post-info --><h2>The Multithreading Problem</h2>
-<p>Nowadays, computers have multiple execution cores meaning that they can execute multiple tasks at the same time rather than sequentially.  Obviously this makes things much faster but it also presents some new problems.  The term <em>multithreading</em> refers to the process in which multiple threads execute code in the same program simultaneously.  The inherent problem with multithreading lies in the fact that although each thread acts independently, their memory is shared.  Therefore, it is possible for threads to change shared memory values without other threads knowing which can create problems.  Let's use a bank account as an example.  Consider the following code that implements a bank account with <code>deposit</code> and <code>withdraw</code> methods.</p>
-<div class="highlight"><pre><span class="k">class</span> <span class="nc">BankAccount</span><span class="o">{</span>
-
-    <span class="k">private</span> <span class="k">var</span> <span class="n">balance</span> <span class="k">=</span> <span class="mi">0</span>
-
-    <span class="k">def</span> <span class="n">deposit</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> 
-        <span class="k">if</span> <span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">+</span> <span class="n">amount</span>
-
-    <span class="k">def</span> <span class="n">withdraw</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span>
-        <span class="k">if</span> <span class="o">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">amount</span> <span class="o">&amp;&amp;</span> <span class="n">amount</span> <span class="o">&lt;=</span> <span class="n">balance</span><span class="o">){</span>
-            <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">-</span> <span class="n">amount</span>
-            <span class="n">balance</span>
-        <span class="o">}</span> <span class="k">else</span> <span class="k">throw</span> <span class="k">new</span> <span class="nc">Error</span><span class="o">(</span><span class="s">&quot;insufficient funds&quot;</span><span class="o">)</span>
-
-<span class="o">}</span>
-</pre></div>
-
-
-<p>Here is a scenario where multithreading can cause problems.  Let's say that <code>balance</code>=40 dollars and <em>thread A</em> would like to withdraw 30 dollars. This satisfies both conditions in the <em>if</em> statement so <em>thread A</em> enters the code block where the 30 dollars is subtracted from the balance.  However, before <em>thread A</em> changes the balance, a second thread, <em>thread B</em>, wants to withdraw 20 dollars.  Since <em>thread A</em> has not yet changed the balance, <em>thread B</em> also satisfies the <em>if</em> statement and enters the code block where the balance can be changed.  So <em>thread A</em> subtracts $30 from the balance and then <em>thread B</em> subtracts 20 dollars from the balance leaving us with a balance of -10 dollars. Clearly, this is a problem!</p>
-<p>Hopefully it is clear that the problem comes from the fact that the shared <em>balance</em> variable can be changed by any thread at any time so no thread can really be sure what value it holds.  One solution is for a thread to be able to reserve the memory values that it will be using so that no other thread can change them.  This is called <em>locking</em>.</p>
-<h3>Using Locks (Synchronous)</h3>
-<p>As stated previously, locking tries to solve the multithreading problem by <em>protecting</em> the shared memory value (in this case <code>balance</code>). Scala does this with <em>synchronization</em>.  Consider the same code as above but now each method definition is wrapped in <code>this.synchronized</code>.</p>
-<div class="highlight"><pre><span class="k">class</span> <span class="nc">BankAccount</span><span class="o">{</span>
-
-    <span class="k">private</span> <span class="k">var</span> <span class="n">balance</span> <span class="k">=</span> <span class="mi">0</span>
-
-    <span class="k">def</span> <span class="n">deposit</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
-        <span class="k">if</span> <span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">+</span> <span class="n">amount</span>
-    <span class="o">}</span>
-
-    <span class="k">def</span> <span class="n">withdraw</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
-        <span class="k">if</span> <span class="o">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">amount</span> <span class="o">&amp;&amp;</span> <span class="n">amount</span> <span class="o">&lt;=</span> <span class="n">balance</span><span class="o">){</span>
-            <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">-</span> <span class="n">amount</span>
-            <span class="n">balance</span>
-        <span class="o">}</span> <span class="k">else</span> <span class="k">throw</span> <span class="k">new</span> <span class="nc">Error</span><span class="o">(</span><span class="s">&quot;insufficient funds&quot;</span><span class="o">)</span>
-   <span class="o">}</span>
-
-<span class="o">}</span>
-</pre></div>
-
-
-<p>Now <code>deposit</code> and <code>withdraw</code> each exit as one atomic unit meaning that only one thread can access them at a time (all others are blocked and must wait until the blocking thread is finished).  Now that all methods that can change <code>balance</code> are synchronized, conflicts such as the ones described above can no longer occur.  Unfortunately, the problem still is not completely solved because synchronization produces a few new problems.  For example, consider another <code>BankAccount</code> method called <code>transfer</code> which withdraws money from one account and deposits it into another with the following synchronized code.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="n">transfer</span><span class="o">(</span><span class="n">from</span><span class="k">:</span> <span class="kt">BankAccount</span><span class="o">,</span> <span class="n">to</span><span class="k">:</span> <span class="kt">BankAccount</span><span class="o">,</span> <span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
-    <span class="n">from</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
-        <span class="n">to</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
-            <span class="n">from</span><span class="o">.</span><span class="n">withdraw</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
-            <span class="n">to</span><span class="o">.</span><span class="n">deposit</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
-
-
-<p>The withdrawal and deposit steps must be synchronized so that no thread can access the balance between withdrawal and deposit (at this point the amount transfered would not be anywhere).  The problem occurs when <em>thread A</em> wants to transfer money from <em>account A</em> to <em>account B</em> at the same time that <em>thread B</em> wants to transfer money from <em>account B</em> to <em>account A</em>.  When this happens <em>thread A</em> would lock <em>account A</em> and <em>thread B</em> would lock <em>account B</em> and each thread would wait for the other to release the lock which would take forever!  This is not good and it is called a <em>dead-lock</em> which is a common problem with synchronization.  There are ways of dealing with <em>dead-locks</em> but they are complicated and can make your code difficult to read.  In addition, stopping and starting threads when they become blocked turns out to be very bad for CPU utilization which will make your code run slower.  It would be much better if we could deal with this multithreading problem in such a way that we do not have to use any kind of blocking.  This is what the Akka actor model does.</p>
-<h3>Using Actors (Asynchronous)</h3>
-<p>Akka actors are fully encapsulated entities.  Changes to their internal state can only be done through passing known messages.  Message passing between actors is one-way and completely asynchronous (i.e. unblocking) so when an actor sends a message it does not have to wait for a reply, it can continue performing other tasks.  If multiple messages are sent to a single actor, it will process them sequentially in a queue (so internally an actor is single-threaded).  If a received message changes an actor's internal state, the change is reflected immediately after the message has been processed.  Therefore, processing one message is the atomic unit of execution (it can never be interrupted).</p>
-<p>In terms of our bank account example, let's create a <code>BankAccount</code> actor that can receive <code>Deposit</code> and <code>Withdraw</code> messages.  In Scala, we create an actor by extending the <code>Actor</code> trait and implementing its <code>receive</code> method.  We must also define the messages that it can send and recieve in the actor's companion object.  The following is an actor-based <code>BankAccount</code> implementation.</p>
-<div class="highlight"><pre><span class="k">object</span> <span class="nc">BankAccount</span> <span class="o">{</span>
-
-  <span class="k">case</span> <span class="k">class</span> <span class="nc">Deposit</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span> <span class="o">{</span>
-    <span class="n">require</span><span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span>
-  <span class="o">}</span>
-
-  <span class="k">case</span> <span class="k">class</span> <span class="nc">Withdraw</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span> <span class="o">{</span>
-    <span class="n">require</span><span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span>
-  <span class="o">}</span>
-
-  <span class="k">case</span> <span class="k">object</span> <span class="nc">Done</span>
-
-  <span class="k">case</span> <span class="k">object</span> <span class="nc">Failed</span>
-
-<span class="o">}</span>
-
-<span class="c1">//Actor that receives messages to perform actions of a bank account</span>
-<span class="k">class</span> <span class="nc">BankAccount</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
-
-  <span class="k">import</span> <span class="nn">BankAccount._</span>
-
-  <span class="k">var</span> <span class="n">balance</span> <span class="k">=</span> <span class="nc">BigInt</span><span class="o">(</span><span class="mi">0</span><span class="o">)</span>
-
-  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
-    <span class="c1">//Deposit messages add amount to balance state</span>
-    <span class="k">case</span> <span class="nc">Deposit</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span> <span class="k">=&gt;</span>
-      <span class="n">balance</span> <span class="o">+=</span> <span class="n">amount</span>
-      <span class="n">sender</span> <span class="o">!</span> <span class="nc">Done</span>
-
-    <span class="c1">//Withdraw messages subtract amount from balance state</span>
-    <span class="k">case</span> <span class="nc">Withdraw</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span> <span class="k">if</span> <span class="n">amount</span> <span class="o">&lt;=</span> <span class="n">balance</span> <span class="k">=&gt;</span>
-      <span class="n">balance</span> <span class="o">-=</span> <span class="n">amount</span>
-      <span class="n">sender</span> <span class="o">!</span> <span class="nc">Done</span>
-
-    <span class="c1">//Any other message would return a failure to the sender</span>
-    <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">sender</span> <span class="o">!</span> <span class="nc">Failed</span>
-  <span class="o">}</span>
-
-<span class="o">}</span>
-</pre></div>
-
-
-<p>In the <code>BankAccount</code> companion object four messages are defined <code>Deposit</code>, <code>Withdraw</code>, <code>Done</code>, and <code>Failed</code>.  In the <code>receive</code> method in the <code>BankAccount</code> class defines how to change the <code>balance</code> variable when either the <code>Deposit</code> or the <code>Withdraw</code> method is received.  Once this is finished, a <code>Done</code> message is passed back to the actor that sent it via the <code>sender</code> variable (an actor's reference is always tied to the message it sends).  If any other message is received, then a <code>Failed</code> message is sent back to the sending actor.</p>
-<p>But we also want to use an actor to transfer money between accounts.  You may remember that this had the potential to produce a <em>dead-lock</em> when done synchronously. We can avoid this using actors because now blocking is replaced with enqueuing messages.  Let's call this actor <code>WireTransfer</code>.  This actor can receive a <code>Transfer</code> message which contains three fields - a reference to the sending <code>BankAccount</code> actor, a reference to the receiving <code>BankAccount</code> actor, and the amount to be transferred.  When <code>WireTransfer</code> receives this message, it sends a <code>Withdraw</code> message (defined within the <code>BankAccount</code> companion object) to the sending actor, awaits a successful <code>Done</code> response, then sends a <code>Deposit</code> message to the recieving actor.  The following code implements the <code>WireTransfer</code> actor.</p>
-<div class="highlight"><pre><span class="k">object</span> <span class="nc">WireTransfer</span> <span class="o">{</span>
-
-  <span class="k">case</span> <span class="k">class</span> <span class="nc">Transfer</span><span class="o">(</span><span class="n">from</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">to</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span>
-
-  <span class="k">case</span> <span class="k">object</span> <span class="nc">Done</span>
-
-  <span class="k">case</span> <span class="k">object</span> <span class="nc">Failed</span>
-
-<span class="o">}</span>
-
-<span class="c1">//actor implementing the actions of a wire transfer between two bank account actors</span>
-<span class="k">class</span> <span class="nc">WireTransfer</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
-
-  <span class="k">import</span> <span class="nn">WireTransfer._</span>
-
-  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
-    <span class="c1">//If Transfer message is received, send withdraw message to &#39;from&#39; and wait for reply</span>
-    <span class="k">case</span> <span class="nc">Transfer</span><span class="o">(</span><span class="n">from</span><span class="o">,</span> <span class="n">to</span><span class="o">,</span> <span class="n">amount</span><span class="o">)</span> <span class="k">=&gt;</span>
-      <span class="n">from</span> <span class="o">!</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Withdraw</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
-      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">awaitFrom</span><span class="o">(</span><span class="n">to</span><span class="o">,</span> <span class="n">amount</span><span class="o">,</span> <span class="n">sender</span><span class="o">))</span>
-  <span class="o">}</span>
-
-  <span class="c1">//If Withdraw was successful, send deposit to other bank account actor, or else give them a failure message</span>
-  <span class="k">def</span> <span class="n">awaitFrom</span><span class="o">(</span><span class="n">to</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">,</span> <span class="n">customer</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
-    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span>
-      <span class="n">to</span> <span class="o">!</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Deposit</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
-      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">awaitTo</span><span class="o">(</span><span class="n">customer</span><span class="o">))</span>
-    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Failed</span> <span class="k">=&gt;</span>
-      <span class="n">customer</span> <span class="o">!</span> <span class="nc">Failed</span>
-      <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
-  <span class="o">}</span>
-
-  <span class="c1">//If deposit was successful, send &#39;Done&#39; to original actor that sent Transfer message</span>
-  <span class="k">def</span> <span class="n">awaitTo</span><span class="o">(</span><span class="n">customer</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
-    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span>
-      <span class="n">customer</span> <span class="o">!</span> <span class="nc">Done</span>
-      <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
-  <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
-
-
-<p>When the actor first receives the <code>Transfer</code> message, it sends a <code>Withdraw</code> message to the <code>BankAccount</code> actor referenced in the <code>from</code> field of the message.  Then the actor must wait until a <code>Done</code> message is received (it does this with the <code>context.become()</code> method) at which point it sends a <code>Deposit</code> message to the other <code>BankAccount</code> actor.</p>
-<p>We can also test this transfer process by creating a new actor that creates two <code>BankAccount</code> actors and a <code>WireTransfer</code> actor and then sends a <code>Transfer</code> message to the <code>WireTransfer</code> actor which references both of the <code>BankAccount</code> actors.  But before the <code>Transfer</code> message is sent, the actor must deposit some money in the first <code>BankAccount</code> actor so that there is some money available to transfer.  Let's call this actor <code>TransferMain</code> and here is its implementation.</p>
-<div class="highlight"><pre><span class="k">class</span> <span class="nc">TransferMain</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
-
-  <span class="c1">//First create two BankAccount actors</span>
-  <span class="k">val</span> <span class="n">accountA</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">[</span><span class="kt">BankAccount</span><span class="o">],</span> <span class="s">&quot;accountA&quot;</span><span class="o">)</span>
-  <span class="k">val</span> <span class="n">accountB</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">[</span><span class="kt">BankAccount</span><span class="o">],</span> <span class="s">&quot;accountB&quot;</span><span class="o">)</span>
-
-  <span class="c1">//send a deposit message to accountA</span>
-  <span class="n">accountA</span> <span class="o">!</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Deposit</span><span class="o">(</span><span class="mi">100</span><span class="o">)</span>
-
-  <span class="c1">//If a &#39;Done&#39; message is received back, call a transfer function</span>
-  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
-    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span> <span class="n">transfer</span><span class="o">(</span><span class="mi">70</span><span class="o">)</span>
-  <span class="o">}</span>
-
-  <span class="c1">//transfer function creates a transacton actor and sends a &#39;Transfer&#39; message to it between</span>
-  <span class="c1">//accountA and accountB for the specified amount.</span>
-  <span class="k">def</span> <span class="n">transfer</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
-
-    <span class="k">val</span> <span class="n">transaction</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">[</span><span class="kt">WireTransfer</span><span class="o">],</span> <span class="s">&quot;transfer&quot;</span><span class="o">)</span>
-
-    <span class="n">transaction</span> <span class="o">!</span> <span class="nc">WireTransfer</span><span class="o">.</span><span class="nc">Transfer</span><span class="o">(</span><span class="n">accountA</span><span class="o">,</span> <span class="n">accountB</span><span class="o">,</span> <span class="n">amount</span><span class="o">)</span>
-
-    <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="nc">LoggingReceive</span> <span class="o">{</span>
-      <span class="k">case</span> <span class="nc">WireTransfer</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span>
-        <span class="n">println</span><span class="o">(</span><span class="s">&quot;successs&quot;</span><span class="o">)</span>
-        <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
-      <span class="k">case</span> <span class="nc">WireTransfer</span><span class="o">.</span><span class="nc">Failed</span> <span class="k">=&gt;</span>
-        <span class="n">println</span><span class="o">(</span><span class="s">&quot;failed&quot;</span><span class="o">)</span>
-        <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
-    <span class="o">})</span>
-
-  <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
-
-
-<p>As you can see from the above code, 100 dollars is deposted in <code>accountA</code> via the <code>Deposit</code> message.  Then, when the <code>Done</code> message is recieved, the <code>transfer</code> function is called with an argument of 70 dollars.  Inside the <code>transfer</code> function, a <code>WireTransfer</code> actor is created and a <code>Transfer</code> message is sent to it with the appropriate arguments.  It then waits for either a <code>Done</code> or <code>Failed</code> message in return.</p>
-<p>Hopefully this blog post has shed some light on the multithreading problem and how the Akka actor model tries to solve it.</p>
-<h2>References</h2>
-<ul>
-<li>This bank account example was taken from the <a href="https://www.coursera.org/course/reactive">Principles of Reactive Programming</a> Coursera course.</li>
-<li>The full code snippets can be found <a href="https://github.com/alexminnaar/Scala_Code_Snippets/tree/master/src/main/scala/BankAccount">on github</a>.</li>
-</ul>
-                    </article>
- 
-<div class="paginator">
-    <div class="navButton">Page 1 / 1</div>
-</div>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
+      </article>
+    </div>
+</section>
         <section id="extras" >
        
         
