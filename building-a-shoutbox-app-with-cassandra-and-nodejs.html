@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Building a Shoutbox App with Cassandra and Node.js</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
+                <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+          </div>
+
+</div>
+
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/building-a-shoutbox-app-with-cassandra-and-nodejs.html" rel="bookmark"
+               title="Permalink to Building a Shoutbox App with Cassandra and Node.js">Building a Shoutbox App with Cassandra and Node.js</a></h1>
+
+        </header>
+
+        <div class="entry-content">
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-02-08T00:00:00+01:00">
+          on&nbsp;Sun 08 February 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info -->          <p>In this blog post I wanted to provide a demonstration of how to use the Cassandra database system in a practical web application.  We'll create a shoutbox app which you can think of as a very simple version of Twitter.</p>
+<h1>What is Cassandra?</h1>
+<p>Cassandra is a NoSQL distributed database system that is designed to deal with large amounts of data.  Its key advantages are the following.</p>
+<ul>
+<li><strong>Scalability:</strong>  Allows you to increase capacity by adding cheap commodity hardware without any downtime.</li>
+<li><strong>Fault Tolerant:</strong>  There is data replications and no single point of failure so if a node goes down the system remains operational.</li>
+<li><strong>Linear Performance:</strong> Throughput increases linearly with the number of nodes in the cluster.</li>
+<li><strong>Data Flexibility:</strong>  Supports many data formats and allows for a variable number of columns for each row.</li>
+</ul>
+<p>In terms of the <a href="http://en.wikipedia.org/wiki/CAP_theorem">CAP theorem</a>, Cassandra values availability and partition tolerance at the expence of consistency.  This means that Cassandra uses <em>eventual consistency</em> which means that eventually the system will reach a consistent state but at any given time it is possible that different nodes can hold different versions of the same data.  The actual architecture of Cassandra is beyond the scope of this blog post but it involves commit logs, memtables, and peer-to-peer gossip protocols.</p>
+<h1>How does Cassandra Work?</h1>
+<h2>Column Families</h2>
+<p>Column families are similar to RDMS tables.  Cassandra is a <em>column-oriented</em> database which means that columns are defined beforehand as well as the data format that each column can hold.  Unlike the RDMS system, rows in Cassandra can contain any number of columns in any order like in the following example.</p>
+<p><img alt="column family example" src="images/static_column_family.png" /></p>
+<p>Cassandra also offers <em>dynamic</em> column families which allows the user to create a row that contains precomputed results that can be quickly retrieved.  This is why Cassandra is described as a <em>key-value</em> database where column <em>values</em> can be quickly lookedup by their associated row <em>key</em>. </p>
+<h2>Keyspaces</h2>
+<p>Cassandra Keyspaces are similar to schemas in RDMS databases.  A keyspace groups and applications column families together.  Replication is done on a <em>per-keyspace</em> basis so data that resides in the same keyspace is replicated in the same way.  There is usually one keyspace per application.</p>
+<h2>Denormalization</h2>
+<p>One of the disadvantages of Cassandra compared to RDMS databases is that it is not well-suited for ad-hoc complex queries.  As a result you must know what queries you will need to perform beforehand and create your keyspaces accordingly.  Cassandra does not have the same foreign key relationships that RDMS databases have therefore you cannot <em>join</em> multiple column families.  As a consequence, the data that you want to retrieve in your queries should be contained in the same column family.  Therefore the queries that you plan on performing will define your data model.</p>
+<h1>Building a Shoutbox App</h1>
+<p>Say you have developed a Twitter-like app where users can post their thoughts (shouts) as well as follow other users.  Let's also assume that this app has exploded in popularity to the point where RDMS systems can no longer handle the huge amount of data so you turn to Cassandra.  Let's learn how an app such as this can interact with Cassandra.</p>
+<h2>Queries we will Use</h2>
+<p>As stated previously, Cassandra uses denormalization which means that we need to first decide what queries we want to perform, then optimize our data model according to these queries.  In our shoutbox app we would like to</p>
+<ul>
+<li>Show all users.</li>
+<li>Show who a user is following.</li>
+<li>Show who is following a user.</li>
+<li>Show the shouts of a particular user.</li>
+<li>Show all shouts.</li>
+</ul>
+<p>Consequently, we will create the following column families to accomodate these queries.</p>
+<ul>
+<li><strong>USERS</strong> which will contain <em>username</em> and <em>password</em> columns.</li>
+<li><strong>FOLLOWING</strong> which will contain <em>username</em> and <em>followed</em> columns.</li>
+<li><strong>FOLLOWERS</strong> which will contain <em>username</em> and <em>following</em> columns.</li>
+<li><strong>SHOUTS</strong> which will contain <em>shout_id</em>, <em>username</em>, and <em>body</em> columns.</li>
+<li><strong>USERSHOUTS</strong> which will contain <em>username</em>, <em>shout_id</em>, and <em>body</em> columns.</li>
+<li><strong>SHOUTWALL</strong> which will contain <em>username</em>, <em>shout_id</em>, <em>posted_by</em> and <em>body</em> columns.</li>
+</ul>
+<p>It may seem redundant to create all of these column families from the RDMS perspective but denomalization is necessary in Cassandra.</p>
+<h2>Creating the Column Families</h2>
+<p>We can actually create these column families using the CQL shell.  But first we have to create the keyspace for our app which we will call <code>shoutkeyspace</code>.</p>
+<div class="highlight"><pre>CREATE KEYSPACE shoutkeyspace WITH REPLICATION - {&#39;class&#39; : &#39;SimpleStrategy&#39;, &#39;replication_factor&#39; : 3};
+</pre></div>
+
+
+<p>In this example we will not be using multiple data centers so <code>SimpleStrategy</code> replication is used rather than  <code>NetworkTopology</code>.  We also use a <code>replication_factor</code> of 3 which indicates that our data will be replicated 3 times in our cluster.  We will use this keyspace to create our column families with the <code>USE shoutkeyspace;</code> command.</p>
+<p>Let's first create the <strong>USERS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE users(username text PRIMARY KEY, password text);
+</pre></div>
+
+
+<p>and now the <strong>FOLLOWING</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE following(username text PRIMARY KEY, followed text);
+</pre></div>
+
+
+<p>and now the <strong>FOLLOWERS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE followers(username text PRIMARY KEY, following text);
+</pre></div>
+
+
+<p>and now the <strong>SHOUTS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE shouts(shout_id uuid PRIMARY KEY, username text, body text);
+</pre></div>
+
+
+<p>and now the <strong>USERSHOUTS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE usershouts(username text, shout_id timeuuid, body text, PRIMARY KEY(username, shout_id));
+</pre></div>
+
+
+<p>and finally the <strong>SHOUTWALL</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE shoutwall(username text, shout_id timeuuid, posted_by text, body text, PRIMARY KEY(username, shout_id));
+</pre></div>
+
+
+<p>The columns associated with a <code>PRIMARY KEY</code> indicate the fields by which we will want to search our column families in our queries.</p>
+<h2>Inserting/Selecting Data</h2>
+<p>Inserting data into these column families will be done within the Node.js application but here is an example CQL statment to give you some idea.</p>
+<div class="highlight"><pre>INSERT INTO users(username, password) VALUES (&#39;user1&#39;, &#39;password1&#39;);
+</pre></div>
+
+
+<p>Obviously this example is purely instructive and in a real-world application more security would be used with respect to storing passwords.  You can also use batch commands to insert multiple values at once.  Selecting data can also be done with the normal SQL syntax, note however that <code>WHERE</code> clauses can only be applied to indexed fields (i.e. fields that are assigned a primary key).</p>
+<h1>Creating the Node.js Frontend</h1>
+<p>The first step in creating a Node.js frontend that interacts with Cassandra is adding the <a href="https://github.com/datastax/nodejs-driver">Node.js Cassandra client driver</a> to the <em>package.json</em> file.  This driver will enable us to connect with the Cassandra database that we have just created.  This can be done with the following code which should be added to the <em>app.js</em> file as well as any javascript file in which a Cassandra connection is made.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">client</span><span class="o">=</span><span class="k">new</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">Client</span><span class="p">({</span><span class="nx">contactPoint</span> <span class="o">:</span> <span class="p">[</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">]});</span>
+<span class="nx">client</span><span class="p">.</span><span class="nx">connect</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
+    <span class="nx">consolde</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;cassandra connected&#39;</span><span class="p">)</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>Note that in the above code we are connecting to a local instance of Cassandra.  This <code>client</code> variable is what we will be using to execute our Cassandra queries</p>
+<h2>Displaying Users</h2>
+<p>The most basic function that we want our app to perform is displaying all of the users.  To this end, we create a <em>users.js</em> file in the <em>routes</em> folder and add the following code.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllUsers</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllUsers</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+    <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,{</span>
+            <span class="nx">users</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+        <span class="p">});</span>
+    <span class="p">}</span>
+  <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>As you can see, the query to select all rows from the <code>users</code> column family is first saved as a string variable.  Then inside the <code>router.get()</code> function, the Cassandra <code>client</code> variable that we defined eariler executes this query and if it is successfull, the corresponding <code>users</code> view is rendered with the query result.  The <code>users</code> view is a <em>jade</em> file and for the purposes of this example it is very simple.</p>
+<div class="highlight"><pre>block content
+    h1 Users
+    ul
+        each user, i in users
+            li #{user.username}
+</pre></div>
+
+
+<p>The <code>each user, i in users</code> line loops through the query result from <em>users.js</em> and the resulting usernames are displayed in a list with <code>#{user.username}</code>.</p>
+<h2>Selecting Individual Users</h2>
+<p>Next we want to be able to select individual users from this list which will navigate us to a new page showing the selected user's information.  We create a new file in the <em>routes</em> folder called <em>user.js</em> and the code is very similar to what we have seen before.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">,{</span>
+                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
+                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
+                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>You may have noticed the strange <code>WHERE username = ?</code> in the query string.  This is because we have to be told which username we are selecting.  This variable is passed into our query by the <code>[req.params.username]</code> parameter.  If the query is executed successfully, the specified user's <code>username</code>, <code>email</code>, and <code>full_name</code> fields are sent to the <em>user</em> view.  Again, the view is quite simple.  It simply displays the fields sent to it in <em>user.js</em>.</p>
+<div class="highlight"><pre>block content
+    h1 User Info
+    ul
+        li Name:
+            strong #{full_name}
+        li Username:
+            strong #{username}
+        li Email Address
+            strong #{email}
+</pre></div>
+
+
+<h2>Adding Users</h2>
+<p>Just like before we need to add a route and a view for adding a user.  Let's call the route <em>adduser.js</em>.  This will involve both a <em>GET</em> and a <em>POST</em> HTTP request - we need to get the data from the <em>adduser</em> form and then post it to Cassandra.</p>
+<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;adduser&#39;</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
+        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
+                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Added&#39;</span><span class="p">);</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>So first we use use a GET request to render the <em>adduser</em> view.  This view contains the form where the required data is added (<em>username</em>, <em>password</em>, <em>email</em>, <em>full_name</em>).</p>
+<div class="highlight"><pre>block content
+    h1 Add User
+    form#formAddUser(name=&quot;adduser&quot;, method=&quot;post&quot;, action=&quot;/adduser&quot;)
+        div
+            input#inputUserName(type=&quot;text&quot;, placeholder=&quot;Enter Username&quot; name=&quot;username&quot;)
+        div
+            input#inputPassword(type=&quot;password&quot;, placeholder=&quot;Enter Password&quot; name=&quot;password&quot;)
+        div
+            input#inputEmail(type=&quot;text&quot;, placeholder=&quot;Enter Email&quot; name=&quot;email&quot;)
+        div
+            input#inputFullName(type=&quot;text&quot;, placeholder=&quot;Enter Full Name&quot; name=&quot;full_name&quot;)
+        div
+            button#btnSubmit(type=&quot;submit&quot;) Submit
+</pre></div>
+
+
+<p>Then we define our query to insert a new user into our Cassandra <em>users</em> column family. We then execute this query with the required fields and if successfull we redirect to the <em>users</em> view which should now contain our new user.</p>
+<h2>Updating Users</h2>
+<p>We also want the ability for a user to update their information. To edit a user's information, we want to present the same form as when the user was intially added with the same information already in the form's fields so that modification is easy.  Again, let's make an <em>edituser</em> route and view.  The <em>edituser.js</em> route looks like the following.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;edituser&#39;</span><span class="p">,</span> <span class="p">{</span>
+                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
+                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
+                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span><span class="p">,</span>
+                <span class="nx">password</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">password</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
+        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
+                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Updated&#39;</span><span class="p">);</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>First we execute a Cassandra query to get the information needed to populate the form.  When this is executed, the <em>edituser</em> view is rendered with form information from the query result appearing in the fields.  The rest is exactly the same as <em>adduser</em>.  Furthermore, the <em>edituser</em> view is almost exactly the same as the <em>adduser.js</em> view (with <code>action=/adduser</code> replaced with <code>action=/edituser</code> and the passed in values added) so I will not show it.</p>
+<h2>Deleting Users</h2>
+<p>We also want to be able to delete users.  To do this we add the following code to the <em>user.js</em> route.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">deleteUser</span> <span class="o">=</span> <span class="s2">&quot;DELETE FROM shoutkeyspace.users WHERE username = ?&quot;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="k">delete</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">deleteUser</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>First we create the delete query and execute it as usual.  However, we still need a way of creating this <em>DELETE</em> request when the <em>deleteuser</em> button is clicked.  We will do this with JQuery and AJAX.  We create a <em>main.js</em> file in the <em>/public/javascripts</em> folder which contains the following JQuery code.</p>
+<div class="highlight"><pre><span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+    <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;click&#39;</span><span class="p">,</span> <span class="nx">deleteUser</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="kd">function</span> <span class="nx">deleteUser</span><span class="p">(){</span>
+    <span class="nx">event</span><span class="p">.</span><span class="nx">preventDefault</span><span class="p">();</span>
+
+    <span class="kd">var</span> <span class="nx">confirmation</span> <span class="o">=</span> <span class="nx">confirm</span><span class="p">(</span><span class="s1">&#39;Are you sure that you want to delete this user?&#39;</span><span class="p">);</span>
+
+    <span class="k">if</span><span class="p">(</span><span class="nx">confirmation</span><span class="p">){</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="nx">type</span><span class="o">:</span> <span class="s1">&#39;DELETE&#39;</span><span class="p">,</span>
+            <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">data</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">)</span>
+        <span class="p">}).</span><span class="nx">done</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+            <span class="nb">window</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
+        <span class="p">});</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="kc">false</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>So when the <em>deleteuser</em> button is clicked, the <em>deleteUser()</em> function is called which uses AJAX to send the <em>DELETE</em> request to the correct URL.</p>
+<h2>Displaying Shouts</h2>
+<p>Now let's turn our attention to displaying shouts.  Again we must create a <em>shouts</em> route and view.  Our <em>shouts.js</em> route should look like the following.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.shouts&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllShouts</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
+                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">getUserShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.usershouts WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getUserShouts</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
+                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>By now, this should be quite straight-forward.  The first <em>GET</em> request displays all shouts to the <em>shouts</em> view from the Cassandra query and the second <em>GET</em> request displays a specified user's shouts to the <em>shouts</em> view from another Cassandra query.</p>
+<h2>Adding Shouts</h2>
+<p>The final piece of the puzzle is enabling users to add shouts.  On the view side, this can be done with the following form.</p>
+<div class="highlight"><pre>form#formAddShout(name=&quot;addshout&quot;, method=&quot;post&quot;, action=&quot;/addshout&quot;)
+        div
+            select(name=&quot;username&quot;)
+                option(value=&quot;devuser1&quot;) devuser1
+                option(value=&quot;devuser2&quot;) devuser2
+                option(value=&quot;devuser3&quot;) devuser3
+                option(value=&quot;devuser4&quot;) devuser4
+        br
+        div
+            textarea(name=&quot;body&quot;, placeholder=&quot;Shout Something!&quot;, cols=&quot;50&quot;, rows=&quot;5&quot;)
+        br
+        div
+            button#btnSubmit(type=&quot;submit&quot;) Submit
+</pre></div>
+
+
+<p>This form contains a textarea in which the user can write their shout as well as the ability to post it as a specific user (ideally you would have a login system but this is beyond the scope of this app).  Next we create the route as the following.</p>
+<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="kd">var</span> <span class="nx">id1</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">uuid</span><span class="p">();</span>
+    <span class="kd">var</span> <span class="nx">id2</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">timeuuid</span><span class="p">();</span>
+
+    <span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.shouts(shout_id, username, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
+            <span class="nx">params</span><span class="o">:</span><span class="p">[</span><span class="nx">id1</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.usershouts(username, shout_id, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
+            <span class="nx">params</span><span class="o">:</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">id2</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">];</span>
+    <span class="nx">queryOptions</span> <span class="o">=</span> <span class="p">{};</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">batch</span><span class="p">(</span><span class="nx">queries</span><span class="p">,</span> <span class="nx">queryOptions</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/shouts&#39;</span><span class="p">);</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>Here we use a Cassandra batch query to insert the added shout into both the <code>shouts</code> and <code>usershouts</code> keyspaces.</p>
+<p>And that covers the basic functionality of our simple shoutbox app.  In summary, we have given a brief overview of Cassandra, added our keyspaces and column families for our app as well a built a Node.js frontend to connect with our Cassandra database.</p>
+<h2>References</h2>
+<ul>
+<li><a href="https://github.com/alexminnaar/shoutApp">Github repo</a> for the code used in this blog post.</li>
+<li><a href="http://www.datastax.com/">Datastax</a> where you can download the free Cassandra community edition as well as learn more about Cassandra.</li>
+<li><a href="http://nodejs.org/">nodejs.org</a> where you can download and learn more about Node.js. </li>
+</ul>
+        </div><!-- /.entry-content -->
+        <div class="comments">
+
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "building-a-shoutbox-app-with-cassandra-and-nodejs.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
+
+      </article>
+    </div>
+</section>
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>
