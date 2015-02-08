@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
                 <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
                 <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
                 <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
@@ -60,6 +61,385 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-02-08T00:00:00+01:00">
+          on&nbsp;Sun 08 February 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>In this blog post I wanted to provide a demonstration of how to use the Cassandra database system in a practical web application.  We'll create a shoutbox app which you can think of as a very simple version of Twitter.</p>
+<h1>What is Cassandra?</h1>
+<p>Cassandra is a NoSQL distributed database system that is designed to deal with large amounts of data.  Its key advantages are the following.</p>
+<ul>
+<li><strong>Scalability:</strong>  Allows you to increase capacity by adding cheap commodity hardware without any downtime.</li>
+<li><strong>Fault Tolerant:</strong>  There is data replications and no single point of failure so if a node goes down the system remains operational.</li>
+<li><strong>Linear Performance:</strong> Throughput increases linearly with the number of nodes in the cluster.</li>
+<li><strong>Data Flexibility:</strong>  Supports many data formats and allows for a variable number of columns for each row.</li>
+</ul>
+<p>In terms of the <a href="http://en.wikipedia.org/wiki/CAP_theorem">CAP theorem</a>, Cassandra values availability and partition tolerance at the expence of consistency.  This means that Cassandra uses <em>eventual consistency</em> which means that eventually the system will reach a consistent state but at any given time it is possible that different nodes can hold different versions of the same data.  The actual architecture of Cassandra is beyond the scope of this blog post but it involves commit logs, memtables, and peer-to-peer gossip protocols.</p>
+<h1>How does Cassandra Work?</h1>
+<h2>Column Families</h2>
+<p>Column families are similar to RDMS tables.  Cassandra is a <em>column-oriented</em> database which means that columns are defined beforehand as well as the data format that each column can hold.  Unlike the RDMS system, rows in Cassandra can contain any number of columns in any order like in the following example.</p>
+<p><img alt="column family example" src="images/static_column_family.png" /></p>
+<p>Cassandra also offers <em>dynamic</em> column families which allows the user to create a row that contains precomputed results that can be quickly retrieved.  This is why Cassandra is described as a <em>key-value</em> database where column <em>values</em> can be quickly lookedup by their associated row <em>key</em>. </p>
+<h2>Keyspaces</h2>
+<p>Cassandra Keyspaces are similar to schemas in RDMS databases.  A keyspace groups and applications column families together.  Replication is done on a <em>per-keyspace</em> basis so data that resides in the same keyspace is replicated in the same way.  There is usually one keyspace per application.</p>
+<h2>Denormalization</h2>
+<p>One of the disadvantages of Cassandra compared to RDMS databases is that it is not well-suited for ad-hoc complex queries.  As a result you must know what queries you will need to perform beforehand and create your keyspaces accordingly.  Cassandra does not have the same foreign key relationships that RDMS databases have therefore you cannot <em>join</em> multiple column families.  As a consequence, the data that you want to retrieve in your queries should be contained in the same column family.  Therefore the queries that you plan on performing will define your data model.</p>
+<h1>Building a Shoutbox App</h1>
+<p>Say you have developed a Twitter-like app where users can post their thoughts (shouts) as well as follow other users.  Let's also assume that this app has exploded in popularity to the point where RDMS systems can no longer handle the huge amount of data so you turn to Cassandra.  Let's learn how an app such as this can interact with Cassandra.</p>
+<h2>Queries we will Use</h2>
+<p>As stated previously, Cassandra uses denormalization which means that we need to first decide what queries we want to perform, then optimize our data model according to these queries.  In our shoutbox app we would like to</p>
+<ul>
+<li>Show all users.</li>
+<li>Show who a user is following.</li>
+<li>Show who is following a user.</li>
+<li>Show the shouts of a particular user.</li>
+<li>Show all shouts.</li>
+</ul>
+<p>Consequently, we will create the following column families to accomodate these queries.</p>
+<ul>
+<li><strong>USERS</strong> which will contain <em>username</em> and <em>password</em> columns.</li>
+<li><strong>FOLLOWING</strong> which will contain <em>username</em> and <em>followed</em> columns.</li>
+<li><strong>FOLLOWERS</strong> which will contain <em>username</em> and <em>following</em> columns.</li>
+<li><strong>SHOUTS</strong> which will contain <em>shout_id</em>, <em>username</em>, and <em>body</em> columns.</li>
+<li><strong>USERSHOUTS</strong> which will contain <em>username</em>, <em>shout_id</em>, and <em>body</em> columns.</li>
+<li><strong>SHOUTWALL</strong> which will contain <em>username</em>, <em>shout_id</em>, <em>posted_by</em> and <em>body</em> columns.</li>
+</ul>
+<p>It may seem redundant to create all of these column families from the RDMS perspective but denomalization is necessary in Cassandra.</p>
+<h2>Creating the Column Families</h2>
+<p>We can actually create these column families using the CQL shell.  But first we have to create the keyspace for our app which we will call <code>shoutkeyspace</code>.</p>
+<div class="highlight"><pre>CREATE KEYSPACE shoutkeyspace WITH REPLICATION - {&#39;class&#39; : &#39;SimpleStrategy&#39;, &#39;replication_factor&#39; : 3};
+</pre></div>
+
+
+<p>In this example we will not be using multiple data centers so <code>SimpleStrategy</code> replication is used rather than  <code>NetworkTopology</code>.  We also use a <code>replication_factor</code> of 3 which indicates that our data will be replicated 3 times in our cluster.  We will use this keyspace to create our column families with the <code>USE shoutkeyspace;</code> command.</p>
+<p>Let's first create the <strong>USERS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE users(username text PRIMARY KEY, password text);
+</pre></div>
+
+
+<p>and now the <strong>FOLLOWING</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE following(username text PRIMARY KEY, followed text);
+</pre></div>
+
+
+<p>and now the <strong>FOLLOWERS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE followers(username text PRIMARY KEY, following text);
+</pre></div>
+
+
+<p>and now the <strong>SHOUTS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE shouts(shout_id uuid PRIMARY KEY, username text, body text);
+</pre></div>
+
+
+<p>and now the <strong>USERSHOUTS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE usershouts(username text, shout_id timeuuid, body text, PRIMARY KEY(username, shout_id));
+</pre></div>
+
+
+<p>and finally the <strong>SHOUTWALL</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE shoutwall(username text, shout_id timeuuid, posted_by text, body text, PRIMARY KEY(username, shout_id));
+</pre></div>
+
+
+<p>The columns associated with a <code>PRIMARY KEY</code> indicate the fields by which we will want to search our column families in our queries.</p>
+<h2>Inserting/Selecting Data</h2>
+<p>Inserting data into these column families will be done within the Node.js application but here is an example CQL statment to give you some idea.</p>
+<div class="highlight"><pre>INSERT INTO users(username, password) VALUES (&#39;user1&#39;, &#39;password1&#39;);
+</pre></div>
+
+
+<p>Obviously this example is purely instructive and in a real-world application more security would be used with respect to storing passwords.  You can also use batch commands to insert multiple values at once.  Selecting data can also be done with the normal SQL syntax, note however that <code>WHERE</code> clauses can only be applied to indexed fields (i.e. fields that are assigned a primary key).</p>
+<h1>Creating the Node.js Frontend</h1>
+<p>The first step in creating a Node.js frontend that interacts with Cassandra is adding the <a href="https://github.com/datastax/nodejs-driver">Node.js Cassandra client driver</a> to the <em>package.json</em> file.  This driver will enable us to connect with the Cassandra database that we have just created.  This can be done with the following code which should be added to the <em>app.js</em> file as well as any javascript file in which a Cassandra connection is made.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">client</span><span class="o">=</span><span class="k">new</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">Client</span><span class="p">({</span><span class="nx">contactPoint</span> <span class="o">:</span> <span class="p">[</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">]});</span>
+<span class="nx">client</span><span class="p">.</span><span class="nx">connect</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
+    <span class="nx">consolde</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;cassandra connected&#39;</span><span class="p">)</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>Note that in the above code we are connecting to a local instance of Cassandra.  This <code>client</code> variable is what we will be using to execute our Cassandra queries</p>
+<h2>Displaying Users</h2>
+<p>The most basic function that we want our app to perform is displaying all of the users.  To this end, we create a <em>users.js</em> file in the <em>routes</em> folder and add the following code.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllUsers</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllUsers</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+    <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,{</span>
+            <span class="nx">users</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+        <span class="p">});</span>
+    <span class="p">}</span>
+  <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>As you can see, the query to select all rows from the <code>users</code> column family is first saved as a string variable.  Then inside the <code>router.get()</code> function, the Cassandra <code>client</code> variable that we defined eariler executes this query and if it is successfull, the corresponding <code>users</code> view is rendered with the query result.  The <code>users</code> view is a <em>jade</em> file and for the purposes of this example it is very simple.</p>
+<div class="highlight"><pre>block content
+    h1 Users
+    ul
+        each user, i in users
+            li #{user.username}
+</pre></div>
+
+
+<p>The <code>each user, i in users</code> line loops through the query result from <em>users.js</em> and the resulting usernames are displayed in a list with <code>#{user.username}</code>.</p>
+<h2>Selecting Individual Users</h2>
+<p>Next we want to be able to select individual users from this list which will navigate us to a new page showing the selected user's information.  We create a new file in the <em>routes</em> folder called <em>user.js</em> and the code is very similar to what we have seen before.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">,{</span>
+                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
+                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
+                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>You may have noticed the strange <code>WHERE username = ?</code> in the query string.  This is because we have to be told which username we are selecting.  This variable is passed into our query by the <code>[req.params.username]</code> parameter.  If the query is executed successfully, the specified user's <code>username</code>, <code>email</code>, and <code>full_name</code> fields are sent to the <em>user</em> view.  Again, the view is quite simple.  It simply displays the fields sent to it in <em>user.js</em>.</p>
+<div class="highlight"><pre>block content
+    h1 User Info
+    ul
+        li Name:
+            strong #{full_name}
+        li Username:
+            strong #{username}
+        li Email Address
+            strong #{email}
+</pre></div>
+
+
+<h2>Adding Users</h2>
+<p>Just like before we need to add a route and a view for adding a user.  Let's call the route <em>adduser.js</em>.  This will involve both a <em>GET</em> and a <em>POST</em> HTTP request - we need to get the data from the <em>adduser</em> form and then post it to Cassandra.</p>
+<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;adduser&#39;</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
+        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
+                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Added&#39;</span><span class="p">);</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>So first we use use a GET request to render the <em>adduser</em> view.  This view contains the form where the required data is added (<em>username</em>, <em>password</em>, <em>email</em>, <em>full_name</em>).</p>
+<div class="highlight"><pre>block content
+    h1 Add User
+    form#formAddUser(name=&quot;adduser&quot;, method=&quot;post&quot;, action=&quot;/adduser&quot;)
+        div
+            input#inputUserName(type=&quot;text&quot;, placeholder=&quot;Enter Username&quot; name=&quot;username&quot;)
+        div
+            input#inputPassword(type=&quot;password&quot;, placeholder=&quot;Enter Password&quot; name=&quot;password&quot;)
+        div
+            input#inputEmail(type=&quot;text&quot;, placeholder=&quot;Enter Email&quot; name=&quot;email&quot;)
+        div
+            input#inputFullName(type=&quot;text&quot;, placeholder=&quot;Enter Full Name&quot; name=&quot;full_name&quot;)
+        div
+            button#btnSubmit(type=&quot;submit&quot;) Submit
+</pre></div>
+
+
+<p>Then we define our query to insert a new user into our Cassandra <em>users</em> column family. We then execute this query with the required fields and if successfull we redirect to the <em>users</em> view which should now contain our new user.</p>
+<h2>Updating Users</h2>
+<p>We also want the ability for a user to update their information. To edit a user's information, we want to present the same form as when the user was intially added with the same information already in the form's fields so that modification is easy.  Again, let's make an <em>edituser</em> route and view.  The <em>edituser.js</em> route looks like the following.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;edituser&#39;</span><span class="p">,</span> <span class="p">{</span>
+                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
+                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
+                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span><span class="p">,</span>
+                <span class="nx">password</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">password</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
+        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
+                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Updated&#39;</span><span class="p">);</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>First we execute a Cassandra query to get the information needed to populate the form.  When this is executed, the <em>edituser</em> view is rendered with form information from the query result appearing in the fields.  The rest is exactly the same as <em>adduser</em>.  Furthermore, the <em>edituser</em> view is almost exactly the same as the <em>adduser.js</em> view (with <code>action=/adduser</code> replaced with <code>action=/edituser</code> and the passed in values added) so I will not show it.</p>
+<h2>Deleting Users</h2>
+<p>We also want to be able to delete users.  To do this we add the following code to the <em>user.js</em> route.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">deleteUser</span> <span class="o">=</span> <span class="s2">&quot;DELETE FROM shoutkeyspace.users WHERE username = ?&quot;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="k">delete</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">deleteUser</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>First we create the delete query and execute it as usual.  However, we still need a way of creating this <em>DELETE</em> request when the <em>deleteuser</em> button is clicked.  We will do this with JQuery and AJAX.  We create a <em>main.js</em> file in the <em>/public/javascripts</em> folder which contains the following JQuery code.</p>
+<div class="highlight"><pre><span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+    <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;click&#39;</span><span class="p">,</span> <span class="nx">deleteUser</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="kd">function</span> <span class="nx">deleteUser</span><span class="p">(){</span>
+    <span class="nx">event</span><span class="p">.</span><span class="nx">preventDefault</span><span class="p">();</span>
+
+    <span class="kd">var</span> <span class="nx">confirmation</span> <span class="o">=</span> <span class="nx">confirm</span><span class="p">(</span><span class="s1">&#39;Are you sure that you want to delete this user?&#39;</span><span class="p">);</span>
+
+    <span class="k">if</span><span class="p">(</span><span class="nx">confirmation</span><span class="p">){</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="nx">type</span><span class="o">:</span> <span class="s1">&#39;DELETE&#39;</span><span class="p">,</span>
+            <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">data</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">)</span>
+        <span class="p">}).</span><span class="nx">done</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+            <span class="nb">window</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
+        <span class="p">});</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="kc">false</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>So when the <em>deleteuser</em> button is clicked, the <em>deleteUser()</em> function is called which uses AJAX to send the <em>DELETE</em> request to the correct URL.</p>
+<h2>Displaying Shouts</h2>
+<p>Now let's turn our attention to displaying shouts.  Again we must create a <em>shouts</em> route and view.  Our <em>shouts.js</em> route should look like the following.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.shouts&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllShouts</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
+                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">getUserShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.usershouts WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getUserShouts</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
+                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>By now, this should be quite straight-forward.  The first <em>GET</em> request displays all shouts to the <em>shouts</em> view from the Cassandra query and the second <em>GET</em> request displays a specified user's shouts to the <em>shouts</em> view from another Cassandra query.</p>
+<h2>Adding Shouts</h2>
+<p>The final piece of the puzzle is enabling users to add shouts.  On the view side, this can be done with the following form.</p>
+<div class="highlight"><pre>form#formAddShout(name=&quot;addshout&quot;, method=&quot;post&quot;, action=&quot;/addshout&quot;)
+        div
+            select(name=&quot;username&quot;)
+                option(value=&quot;devuser1&quot;) devuser1
+                option(value=&quot;devuser2&quot;) devuser2
+                option(value=&quot;devuser3&quot;) devuser3
+                option(value=&quot;devuser4&quot;) devuser4
+        br
+        div
+            textarea(name=&quot;body&quot;, placeholder=&quot;Shout Something!&quot;, cols=&quot;50&quot;, rows=&quot;5&quot;)
+        br
+        div
+            button#btnSubmit(type=&quot;submit&quot;) Submit
+</pre></div>
+
+
+<p>This form contains a textarea in which the user can write their shout as well as the ability to post it as a specific user (ideally you would have a login system but this is beyond the scope of this app).  Next we create the route as the following.</p>
+<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="kd">var</span> <span class="nx">id1</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">uuid</span><span class="p">();</span>
+    <span class="kd">var</span> <span class="nx">id2</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">timeuuid</span><span class="p">();</span>
+
+    <span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.shouts(shout_id, username, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
+            <span class="nx">params</span><span class="o">:</span><span class="p">[</span><span class="nx">id1</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.usershouts(username, shout_id, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
+            <span class="nx">params</span><span class="o">:</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">id2</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">];</span>
+    <span class="nx">queryOptions</span> <span class="o">=</span> <span class="p">{};</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">batch</span><span class="p">(</span><span class="nx">queries</span><span class="p">,</span> <span class="nx">queryOptions</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/shouts&#39;</span><span class="p">);</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>Here we use a Cassandra batch query to insert the added shout into both the <code>shouts</code> and <code>usershouts</code> keyspaces.</p>
+<p>And that covers the basic functionality of our simple shoutbox app.  In summary, we have given a brief overview of Cassandra, added our keyspaces and column families for our app as well a built a Node.js frontend to connect with our Cassandra database.</p>
+<h2>References</h2>
+<ul>
+<li><a href="https://github.com/alexminnaar/shoutApp">Github repo</a> for the code used in this blog post.</li>
+<li><a href="http://www.datastax.com/">Datastax</a> where you can download the free Cassandra community edition as well as learn more about Cassandra.</li>
+<li><a href="http://nodejs.org/">nodejs.org</a> where you can download and learn more about Node.js. </li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
         
         
 
@@ -315,13 +695,73 @@ Machine Learning at University College London. Natural language processing at Ve
 </pre></div>
 
 
-<p>And that is the basic functionality of the distributed binary search tree.  The full code is available on <a href="https://github.com/alexminnaar/ActorBinaryTree">this github repo</a>.  Hopefully this blog post has shed some light on the Akka actor model and how it can be used to build concurrent, distributed applications like this one</p>
+<p>And that is the basic functionality of the distributed binary search tree.  The full code is available on <a href="https://github.com/alexminnaar/ActorBinaryTree">this github repo</a>.  Hopefully this blog post has shed some light on the Akka actor model and how it can be used to build concurrent, distributed applications like this one.</p>
 <h2>References</h2>
 <ul>
 <li><a href="http://akka.io/">The Akka Homepage</a></li>
 <li><a href="https://www.coursera.org/course/reactive">Principles of Reactive Programming Coursera Course</a></li>
 <li><a href="https://github.com/alexminnaar/ActorBinaryTree">GitHub repository</a> for the code used in this post.</li>
 </ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/how-to-multiply-a-transposed-distributed-rowmatrix-in-spark.html">How to Multiply a Transposed Distributed RowMatrix in Spark</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-01-05T00:00:00+01:00">
+          on&nbsp;Mon 05 January 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>I was recently building a spark implementation of a topic modelling algorithm which involved a matrix where the rows represented the number of topics and the columns represented the words in the vocabulary.  Initially I was storing this matrix locally using a <a href="http://www.scalanlp.org/api/breeze/index.html#breeze.linalg.DenseMatrix">Breeze DenseMatrix</a>.  However, when my vocabulary size grew to around 100,000 with a few hundred topics I eventually encountered an out-of-memory error.  I had to start using a distributed matrix.  Spark's <a href="http://spark.apache.org/docs/latest/mllib-guide.html">MLlib</a> has three kinds of distributed matrices.</p>
+<ul>
+<li><a href="https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.RowMatrix">RowMatrix</a> - A matrix distributed by row.</li>
+<li><a href="https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix">IndexedRowMatrix</a> - A matrix distributed by an indexed row.</li>
+<li><a href="https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.CoordinateMatrix">CoordinateMatrix</a> - A matrix distributed by entry.</li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/replicating-the-nrc-state-of-the-art-sentiment-analyzer.html">Replicating the NRC State-of-the-Art Sentiment Analyzer</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-01-05T00:00:00+01:00">
+          on&nbsp;Mon 05 January 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>The Drawbacks of Stanford's Deep Learning Sentiment Analysis Tool</h2>
+<p>Stanford has released an interesting <a href="http://nlp.stanford.edu/sentiment/index.html">sentiment analysis tool</a> as part of their great <a href="http://nlp.stanford.edu/software/corenlp.shtml">CoreNLP package</a>.  It is based on a recursive deep learning model that takes into account the semantic structure of the entire sentence rather than simply summing the positive and negative sentiments of the words that appear in it.  This idea is very promising.  Clearly a sentence's structure contains a lot of usefull information that could be used for determining its sentiment. Unfortunately, it has a few drawbacks which prevent it from being my sentiment analyzer of choice.</p>
+<ul>
+<li><strong>Training Data:</strong>  The out-of-the-box sentiment model that this tool comes with was trained using the <a href="http://nlp.stanford.edu/sentiment/treebank.html">Sentiment Treebank</a> dataset which is composed of 9,645 sentences.  If you look at some of these sentences you will quickly see that they are very well structured in terms of spelling and grammatical correctness.  In contrast, most social media text is not so well structured (eg. misspellings, grammar mistakes, abbreviations, slang, emoticons etc.).  Obviously, if the data with which you train your model is different from the data on which you apply that model, you cannot expect to observe good performance.</li>
+<li><strong>Out-of-Vocabulary Words:</strong>  This drawback is closely related to the previous one.  Oftentimes sentences contain words that are <em>out-of-vocabulary</em> (sometimes called OOV words) which are words that are not contained in your dictionary of known words (eg. misspellings, rare words, slang etc.).  It is very difficult to build a semantic model of of a sentences structure if it contains OOV words.  It is very possible that one word could change a sentence's structure entirely and if that word is OOV it is very likely that your structure model could be wrong.  For this reason, a sentiment model based on sentence structure could be problematic.</li>
+<li><strong>Tokenization:</strong>  Stanford's sentiment analysis tool makes use of the <a href="http://nlp.stanford.edu/software/tokenizer.shtml">Stanford Tokenizer</a>.  A major problem with the Stanford tokenizer is that it almost always tokenizes emoticons incorrectly.  For example, it will split the classic smiley emoticon ":)" into a ":" token followed by a separate ")" token.  Obviously emoticons can convey a great deal of information regarding sentiment (particulary in short sentences such as tweets) so ignoring them is a big problem.</li>
+</ul>
+<h2>The NRC Strategy: Lexicons, Lexicons, Lexicons!</h2>
                     </article>
                 </div>
             </aside><!-- /#featured -->
@@ -535,570 +975,9 @@ Machine Learning at University College London. Natural language processing at Ve
 <li>The full code snippets can be found <a href="https://github.com/alexminnaar/Scala_Code_Snippets/tree/master/src/main/scala/BankAccount">on github</a>.</li>
 </ul>
                     </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-11-11T00:00:00+01:00">
-          on&nbsp;Tue 11 November 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/software-engineering.html">   Software Engineering</a></p>
-</div><!-- /.post-info --><p>The <a href="http://nlp.stanford.edu/software/CRF-NER.shtml">Stanford NER (named entity recognizer) tool</a> is a widely-used, general purpose named entity recognition tool that Stanford has made available as part of its CoreNLP Java library.  It performs named entity recognition via a CRF-based sequence model which has been known to give near state-of-the-art performance results which makes it a popular choice for open-source NER tools.</p>
-<p>Having said that, I have used this tool in the past and I was left wanting more functionality.  From its <a href="http://nlp.stanford.edu/software/crf-faq.shtml">FAQ section</a>, you can see that most of its functionality (i.e. training and testing a NER model) is designed to be performed using the command line.  But what if you want to use a pre-trained NER model as part of a real-time text processing pipeline?  For example, you are processing a string of text and you want to apply your NER model to the text and then do something with the tokens corresponding to classified named entities.  There is no clear way to do this with the Stanford NER tool.</p>
-<p>I have also found that the Stanford NER tool is lacking in its model validation functionality.  Just like any classification model, I want to be able to perform cross-validation tests on my training data so that I can be confident in its generalized performance.  Again, there is no clear way of doing this.  You can test your model on a test set and obtain the precision, recall and F1 values but unfortunately these values are just shown in standard output and there is no way to persist them.  Consequently, if you wanted to perform 50-fold cross-validation on your dataset you would have to visually read each of the 50 sets of performance metrics off the screen and then manually average them to get your desired result (or export standard output and parse it).  Obviously no one wants to do this.</p>
-<p><a href="https://github.com/alexminnaar/ScalaNER">ScalaNER</a> attempts to solve these problems by offering the following additional functionality to the Stanford NER tool.</p>
-<ul>
-<li>Programmatically apply a pre-trained NER model to a string of text and output the labelled result.</li>
-<li>Programmatically train an NER model.</li>
-<li>Easy model validation.  Specifically cross-validation.</li>
-</ul>
-<h2>ScalaNER Demo</h2>
-<p>The following code samples demonstrate this new functionality.  First of all, it should be noted that the training data sets must be in the same format that the Stanford NER tool accepts.  That is, each line must contain a tab-separated token/label pair.  Entity labels can be any string but non-entity labels must be "O".  For example, training data for a person name entity might look like</p>
-<div class="highlight"><pre>The    O
-US    O
-president    O
-is    O
-Barrack    NAME
-Obama    NAME
-</pre></div>
-
-
-<p>where named entities are labelled as "NAME" and non-entity tokens are labelled as "O".</p>
-<h3>Train an NER Model</h3>
-<p>First we will demonstrate how to train a NER model given a training dataset in the format explained above.  The code is very simple - in fact it is only one line.  It uses a Scala object called <code>NERModel</code>.  To train an NER model you simply call this object's <code>trainClassifier</code> method which takes two arguments, the location of the training data file (it must be a text file) and the filename and location where the the trained NER model will be saved.</p>
-<div class="highlight"><pre><span class="nc">NERModel</span><span class="o">.</span><span class="n">trainClassifier</span><span class="o">(</span><span class="s">&quot;my/data/location.txt&quot;</span><span class="o">,</span> <span class="s">&quot;save/my/model/here.ser.gz&quot;</span><span class="o">)</span>
-</pre></div>
-
-
-<h3>Apply an NER Model</h3>
-<p>Then once you have trained your NER model you will probably want to apply this model to some new text.  To do this we use the <code>ApplyModel</code> class which takes the location of the trained model as a constructor.  Once this class has been instantiated, we call its <code>runNER</code> method which takes a string as an input argument.  This input string is the text from which you want to extract the named entities.  The result is an indexed sequence of <code>LabeledToken</code> objects which contain a token field and a label field.  The token fields contain the tokens in the input string and the label fields contain the named entities that the tokens have been assigned to.</p>
-<div class="highlight"><pre><span class="k">val</span> <span class="n">classifier</span><span class="k">=new</span> <span class="nc">ApplyModel</span><span class="o">(</span><span class="s">&quot;my/pretrained/model.ser.gz&quot;</span><span class="o">)</span>
-
-<span class="k">val</span> <span class="n">results</span><span class="k">=</span><span class="n">classifier</span><span class="o">.</span><span class="n">runNER</span><span class="o">(</span><span class="s">&quot;Find named entities in this new sentence.&quot;</span><span class="o">)</span>
-</pre></div>
-
-
-<h3>Performing Cross-Validation on an NER Model</h3>
-<p>To perform cross-validation we use the CrossValidation class which takes the number of folds and training data location as constructors.  Then we call the <code>runCrossValidation</code> method with an input parameter that is the location of the directory where the training and validation sets will be written.  The result is a vector whose elements correspond to the number of folds.  Each element is a map whose keys represent the unique entity types in that fold and values represent the precision, recall and F1-score of the corresponding entity type.</p>
-<div class="highlight"><pre><span class="k">val</span> <span class="n">testInstance</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">CrossValidation</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="s">&quot;location/of/training/data.txt&quot;</span><span class="o">)</span>
-
-<span class="k">val</span> <span class="n">xvalResults</span><span class="k">=</span><span class="n">classifier</span><span class="o">.</span><span class="n">runCrossValidation</span><span class="o">(</span><span class="s">&quot;directory/to/write/xvalidation/data/&quot;</span><span class="o">)</span>
-</pre></div>
-
-
-<p>Next let's look at a real-world example.</p>
-<h2>Example: Identifying Protein Names</h2>
-<p>Suppose that you wanted to train an NER model to identify protein named in bio-medical literature.  We will use the BioNLP dataset that has already been transformed into the correct Stanford NER format which can be found in the <a href="https://github.com/alexminnaar/ScalaNER/tree/master/data">ScalaNER github repo</a>.</p>
-<p>First let's try training an NER model with this data and running it on a sample string of text to determine if it contains any protein names.</p>
-<div class="highlight"><pre><span class="nc">NERModel</span><span class="o">.</span><span class="n">trainClassifier</span><span class="o">(</span><span class="s">&quot;data/bionlp.txt&quot;</span><span class="o">,</span> <span class="s">&quot;/bioNlpModel.ser.gz&quot;</span><span class="o">)</span>
-
-<span class="k">val</span> <span class="n">classifier</span><span class="k">=new</span> <span class="nc">ApplyModel</span><span class="o">(</span><span class="s">&quot;/bioNlpModel.ser.gz&quot;</span><span class="o">)</span>
-
-<span class="k">val</span> <span class="n">results</span><span class="k">=</span><span class="n">classifier</span><span class="o">.</span><span class="n">runNER</span><span class="o">(</span><span class="s">&quot;Leukotriene B4 stimulates c-fos and c-jun gene transcription and AP-1 binding activity in human monocytes.&quot;</span><span class="o">)</span>
-
-<span class="n">println</span><span class="o">(</span><span class="n">results</span><span class="o">)</span>
-</pre></div>
-
-
-<p>Which gives the following output</p>
-<p><code>Vector(LabeledToken(Leukotriene,O), LabeledToken(B4,O), LabeledToken(stimulates,O), LabeledToken(c-fos,protein), LabeledToken(and,O), LabeledToken(c-jun,protein), LabeledToken(gene,O), LabeledToken(transcription,O), LabeledToken(and,O), LabeledToken(AP-1,O), LabeledToken(binding,O), LabeledToken(activity,O), LabeledToken(in,O), LabeledToken(human,O), LabeledToken(monocytes,O), LabeledToken(.,O))</code></p>
-<p>As you can see, the trained model assigns the correct <em>protein</em> label to the tokens "c-fos" and "c-jun" and all other tokens are assigned the <em>O</em> label indicating that they are not named entities.</p>
-<p>Next, let's perform 5-fold cross-validation on the entire dataset to get a good idea of its generalized performance.  This can be done in the following code where we specify the folder "data/xval" to be location where the 5 training and validation sets will be written.</p>
-<div class="highlight"><pre><span class="k">val</span> <span class="n">cv</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">CrossValidation</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="s">&quot;data/bionlp.txt&quot;</span><span class="o">)</span>
-
-<span class="k">val</span> <span class="n">testResults</span> <span class="k">=</span> <span class="n">cv</span><span class="o">.</span><span class="n">runCrossValidation</span><span class="o">(</span><span class="s">&quot;data/xval&quot;</span><span class="o">)</span>
-
-<span class="n">println</span><span class="o">(</span><span class="n">testResults</span><span class="o">)</span>
-</pre></div>
-
-
-<p>Which gives the following output</p>
-<p><code>Vector(Map(protein -&gt; Performance(0.680461329715061,0.9862340216322517,0.8052990766760337), O -&gt; Performance(0.999634483838964,0.9878479836941098,0.9937062846316554)), Map(O -&gt; Performance(0.9991162403826159,0.9858425237240318,0.9924350003872866), protein -&gt; Performance(0.5766871165644172,0.9567430025445293,0.7196172248803828)), Map(O -&gt; Performance(0.9986442092089483,0.9858183409260546,0.9921898273472612), protein -&gt; Performance(0.6125175808720112,0.9436619718309859,0.7428571428571428)), Map(O -&gt; Performance(0.9994266652767643,0.9878419452887538,0.9936005389019872), protein -&gt; Performance(0.6638176638176638,0.9769392033542977,0.7905004240882104)), Map(O -&gt; Performance(0.9988831168831169,0.9877484974572354,0.9932846036624738), protein -&gt; Performance(0.6261755485893417,0.9489311163895487,0.7544853635505192)))</code></p>
-<p>The above output shows the precision, recall and F1-scores for each entity type (in this case protein and O) and each of the 5 folds.  So the F1-scores associated with identifying <em>protein</em> named entities are 0.8052, 0.7196, 0.7428, 0.7905, and 0.7544 for an average F1-score of 0.7625.</p>
-<h2>References</h2>
-<ul>
-<li><a href="http://nlp.stanford.edu/software/CRF-NER.shtml">Stanford Named Entity Recognizer</a></li>
-<li><a href="https://github.com/alexminnaar/ScalaNER">ScalaNER Github Repo</a></li>
-</ul>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-10-14T00:00:00+02:00">
-          on&nbsp;Tue 14 October 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><h2>The Problem with Latent Dirichlet Allocation and Large Data Sets</h2>
-<p>By now it has become very clear that Latent Dirichlet Allocation (LDA) has a variety of valuable, real-world use cases.  However, most real-world use cases involve large volumes of data which can be problematic for LDA.  This is because both of the traditional implementations of LDA (variational inference and collapsed Gibbs sampling) require the entire corpus (or some encoding of it) to be loaded into main memory.  Obviously, if you are working with a single machine and a data set that is sufficiently large, this can be infeasible.  One solution is to parallelize the algorithm and scale out until you have the required resources.  However, this presents an entire new set of problems - acquiring a cluster of machines, modifying your LDA code such that it can work in a MapReduce framework, etc.  A much better solution would be to segment your large data set into small batches and sequentially read each of these batches into main memory and update your LDA model as you go in an online fashion.  This way you are only keeping a small fraction of your large data set in main memory at any given time.  Furthermore, consider a scenario where your corpus is constantly growing such as an online discussion forum.  As your corpus grows you want to see how the topics are changing.  With traditional variational inference you would have to rerun the entire batch algorithm with the old data and the new data but it would be much more efficient to simply update your model with only the new data.  In their paper <a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CDEQFjAA&amp;url=https%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiBach2010b.pdf&amp;ei=b4bvU-2_K433yQSbh4LoCw&amp;usg=AFQjCNHLmU8Gk_P4usBj2QcGcaolw87w4w&amp;sig2=cbFKirN-0jWvPj-mCqRP_g&amp;bvm=bv.73231344,d.aWw">Online Learning for Latent Dirichlet Allocation</a>, Blei et al. present an algorithm for achieving this kind of functionality.  This blog post aims to give a summary of this paper and also show some results from my own Scala implementation.</p>
-<h2>Variational Inference vs Stochastic Variational Inference</h2>
-<p>Let's start off with a very general graphical model that includes observations, local hidden variables, and global hidden variables.</p>
-<p><img alt="general graphical model" src="images/general_graphical_model.png" /> </p>
-<p>In the above graphical model, there are <span class="math">\(N\)</span> observations <span class="math">\(x_{1:N}\)</span> and one local hidden variable for each observation <span class="math">\(z_{1:N}\)</span>.  There are also global hidden variables <span class="math">\(\beta\)</span> with a known prior <span class="math">\(\alpha\)</span>.  I will first compare variation inference with stochastic variational inference in the context of this graphical model because it can be generalized to a variety of different graphical models with local and global hidden variables e.g. the LDA model, Gaussian mixture models, hidden Markov models and many more.</p>
-<p>The joint distribution of this graphical model is</p>
-<p><span class="math">\(p(x,z,\beta | \alpha)=p(\beta | \alpha)\prod_{n=1}^Np(x_n,z_n | \beta)\)</span></p>
-<p>Also, our assumption that <span class="math">\(\beta\)</span> are the global parameters and <span class="math">\(z_n\)</span> are the local parameters is formalized by the fact that the observation <span class="math">\(x_n\)</span> and the corresponding local variable <span class="math">\(z_n\)</span> are conditionally independent given the global variables <span class="math">\(\beta\)</span> i.e.</p>
-<p><span class="math">\(p(x_n,z_n|x_{-n},z_{-n},\beta,\alpha)=p(x_n,z_n|\beta,\alpha)\)</span></p>
-<p>Another assumption that we make in this model is that the conditional distributions of the hidden variables given the observations and other hidden variables (also called the complete conditionals) are in the exponential family which means they take the general form</p>
-<p><span class="math">\(p(\beta | x,z,\alpha)=h(\beta)\exp(\eta_g (x,z,\alpha)^Tt(\beta)-a_g(\eta_g(x,z,\alpha)))\)</span></p>
-<p><span class="math">\(p(z_{nj}|x_n,z_{n,-j},\beta)=h(z_{nj})\exp(\eta_l(x_n,z_{n,-j},\beta)^Tt(z_{nj})-\alpha_l(\eta_l(x_n,z_{n,-j},\beta)))\)</span></p>
-<p>Where <span class="math">\(h(.)\)</span> is called the base measure, <span class="math">\(a(.)\)</span> is called the log-normalizer, <span class="math">\(\eta(.)\)</span> is called the natural parameter, and <span class="math">\(t(.)\)</span> is called the sufficient statistics.  Furthermore, we also assume that the prior distribution over <span class="math">\(\beta\)</span> is part of the exponential family.</p>
-<p><span class="math">\(p(\beta)=h(\beta)\exp(\alpha^Tt(\beta)-a_g(\alpha))\)</span></p>
-<p>The main goal is to compute the posterior distribution of the hidden variables given the observed variables</p>
-<p>
-<div class="math">$$p(\beta,z|x)=\frac{p(x,z,\beta)}{\int p(x,z,\beta)dz d \beta}$$</div>
-</p>
-<p>Unfortunately, the denominator <span class="math">\(\int p(x,z,\beta)dz d \beta\)</span> is intractable to compute so we must use approximate inference techniques such as variational inference.</p>
-<h3>Variational Inference</h3>
-<p>Variational inference turns the inference problem into an optimization problem.  A new distribution over the hidden variables <span class="math">\(q(z,\beta)\)</span> (called the variational distribution) is introduced.  This new distribution has properties such that it can be efficiently computed.  The variational distribution is a function of a set of free parameters that are optimized such that the variational distribution is as close as possible to the actual target posterior distribution where closeness is measured in terms of KL divergence.  Minimizing the KL divergence between the variational distribution and the target posterior is equivalent to maximizing the evidence lower bound (ELBO) (proof not shown here) which is</p>
-<p>
-<div class="math">$$\mathscr{L}(q)=E_q[\log p(x,z,\beta)]-E_q[\log q(z,\beta)]$$</div>
-</p>
-<p>As stated earlier, the variational distribution has the property that it can be efficiently computed.  This is done by making each hidden variable independent of each other.</p>
-<p><span class="math">\(q(z,\beta)=q(\beta|\lambda)\prod_{n=1}^N \prod_{j=1}^J q(z_{nj}|\phi_{nj})\)</span></p>
-<p>Furthermore, each hidden variable is governed by its own variational parameter so the variational parameters <span class="math">\(\lambda\)</span> governs the global variables <span class="math">\(\beta\)</span> and the variational parameters <span class="math">\(\phi_n\)</span> govern the local variables <span class="math">\(z_n\)</span>.  <span class="math">\(q(\beta | \lambda)\)</span> and <span class="math">\(q(z_{nj} | \phi_{nj})\)</span> take the same form as the complete conditionals <span class="math">\(p(\beta | x,z,\alpha)\)</span> and <span class="math">\(p(z_{nj}|x_n,z_{n,-j},\beta)\)</span>, but the natural parameters are now <span class="math">\(\lambda\)</span> and <span class="math">\(\phi_{nj}\)</span>, respectively to give</p>
-<p><span class="math">\(q(\beta | \lambda)=h(\beta)\exp(\lambda^Tt(\beta)-a_g(\lambda))\)</span></p>
-<p><span class="math">\(q(z_{nj}|\phi_{nj})=h(z_{nj})\exp(\phi_{nj}^Tt(z_{nj})-a_l(\phi_{nj}))\)</span></p>
-<p>We maximize the ELBO objective function with a coordinate ascent procedure.  We find its gradient with respect to the global variational parameter <span class="math">\(\lambda\)</span> and find the value of <span class="math">\(\lambda\)</span> that sets the gradient to zero.  We do the same thing for the local parameters <span class="math">\(\phi_{n}\)</span>.  We iterate between these updates until we converge to the maximum of the ELBO.  The updates are given without proof, but the general procedure is to write the ELBO in terms of parameter of interest (either <span class="math">\(\lambda\)</span> or <span class="math">\(\phi_n\)</span>) then take the gradient and set it to zero.</p>
-<p>
-<div class="math">$$\lambda=E_q[\eta_g(x,z,\alpha)]$$</div>
-</p>
-<p>
-<div class="math">$$\phi_{nj}=E_q[\eta_l(x_n,z_{n,-j},\beta)]$$</div>
-</p>
-<p>Therefore the updates of each variational parameter are equal to the expected value of the natural parameters of the complete conditionals.  The complete coordinate ascent algorithm is given below.</p>
-<p><img alt="variational inference" src="images/variational_inference.png" /> </p>
-<p>As you can see, in the local parameter update (steps 3 and 4), we have to iterate over every data point in the data set which is computationally expensive and (as we will see later) not necessary.</p>
-<h3>Stochastic Variational Inference</h3>
-<p>Stochastic variational inference uses a stochastic optimization technique to sequentially maximize the ELBO using unbiased samples from the data set.  Updates are performed with the following formula</p>
-<p><span class="math">\(\lambda^{(t)}=\lambda^{(t-1)}+\rho_tb_t(\lambda^{(t-1)})\)</span></p>
-<p>where <span class="math">\(b_t\)</span> is a noisy (but unbiased) gradient of the objective function obtained from a subsample of the data set.  If the step size <span class="math">\(\rho_t\)</span> satisfies the following constraints</p>
-<p><span class="math">\(\sum \rho_t=\infty\)</span>,   <span class="math">\(\sum \rho_t^2 &lt; \infty\)</span></p>
-<p>then it is guaranteed to converge to the global optimum <span class="math">\(\lambda^*\)</span> if the objective function is convex, or a local optima if it is not convex.  Now let's look at how this noisy gradient can be computed for a single data point.  First we write the ELBO in terms of a global term and a sum of local terms.</p>
-<p><span class="math">\(\mathcal{L}(\lambda)=E_q[\log p(\beta)]-E_q[\log q(\beta)]+\sum^N_{n=1}\max(E_q[\log p(x_n,z_n | \beta)]-E_q[\log q(z_n)])\)</span></p>
-<p>Consider a randomly chosen data point index <span class="math">\(I\)</span> sampled from <span class="math">\(Unif(1,...,N)\)</span>. For this data point <span class="math">\(x_{I}\)</span> let us define</p>
-<p><span class="math">\(\mathcal{L}_I(\lambda)=E_q[\log p(\beta)]-E_q[\log q(\beta)]+N \max(E_q[\log p(x_I,z_I | \beta)]-E_q[\log q(z_I)])\)</span></p>
-<p>This is equivalent to the original ELBO if the entire data set was made up of <span class="math">\(x_{I}\)</span>.  There are two important facts that one must understand about <span class="math">\(\mathcal{L}_I(\lambda)\)</span></p>
-<p>The expectation of <span class="math">\(\mathcal{L}_I(\lambda)\)</span> with respect to the data point <span class="math">\(x_{I}\)</span> is equivalent to the original ELBO.
-As a consequence, the gradient of <span class="math">\(\mathcal{L}_I(\lambda)\)</span> can be thought of as a noisy gradient of the original ELBO because it is unbiased.
-However, we do not want to take the usual gradient of <span class="math">\(\mathcal{L}_I(\lambda)\)</span>.  Instead we want to take the natural gradient.  The usual gradient assumes that the parameter space is Euclidean but it turns out that it is better to assume that it has a Riemannian metric structure (in the context of minimizing KL divergence) which is what the natural gradient does.  A full explanation of the natural gradient is beyond the scope of this blog post but this paper by Amari gives a good overview.  The The natural gradient of  <span class="math">\(\mathcal{L}_I(\lambda)\)</span> is</p>
-<p><span class="math">\(\nabla \mathcal{L}_i=E_q[\eta_g(x_i^{(N)},z_i^{(N)},\alpha)]-\lambda\)</span></p>
-<p>and setting this gradient to zero gives the update</p>
-<p>
-<div class="math">$$\lambda=E_q[\eta_g(x_i^{(N)},z_i^{(N)},\alpha)]$$</div>
-</p>
-<p>The full algorithm is shown below</p>
-<p><img alt="stochastic variational" src="images/stochastic_variational.png" /> </p>
-<p>The procedure consists of sampling a single data point then finding the optimal local parameters for that data point then updating the global  variational parameters under the assumption that the entire dataset consisted of <span class="math">\(N\)</span> replicas of that data point.  Then this "intermediate" global variational parameter is combined with the previous "overall" global parameter via a weighted average to produce a new "overall" global parameter.  In this way, the global parameters can be updated after each sample is seen, rather than once after each iteration over the entire data set as in traditional variational inference (however, in pactice "mini-batches" of data points are used rather than a single point).  Now let's finally see how we can apply stochastic variational inference to Latent Dirichlet Allocation to get a scalable online learning algorithm.</p>
-<h2>Stochastic Variational Inference and LDA</h2>
-<p>Topic models aim to uncover the hidden thematic coherent topics that exist in a corpus of documents.  The most popular topic model is Latent Dirichlet Allocation (LDA).  In LDA, documents are thought of as distributions over topics and the topics themselves are distributions over words.  The graphical model for LDA can be thought of as a special case of the general graphical model shown earlier.  In the case of LDA, the global parameters are the topic distributions <span class="math">\(\beta\)</span>  which all documents depend on and the local parameters are the document-topic proportions <span class="math">\(\theta\)</span> which are independent between documents and <span class="math">\(Z\)</span> the topic assignments for each word in the document. So, in this context, "local" refers to document-specific variables and "global" refers to corpus-specific variables. The observed variables are the words that appear in each document (in bag-of-words format).  LDA is explained in greater detail in my previous blog post on the subject but here is the graphical model as a reminder.</p>
-<p><img alt="lda graphical model" src="images/smoothed_lda.png" /> </p>
-<p>In terms of notation, let's assume there are <span class="math">\(N\)</span> unique words in the vocabulary, <span class="math">\(D\)</span> documents in the corpus, and <span class="math">\(K\)</span> topics.  The next step is defining the complete conditionals for the LDA model (i.e. the distributions of each variable given all of the other variables both hidden and observed).  The complete conditionals for the local topic assignments <span class="math">\(Z\)</span>, the local topic proportions <span class="math">\(\theta\)</span>, and global topic distributions <span class="math">\(\beta\)</span> are</p>
-<p><span class="math">\(p(z_{dn} | \theta_d,\phi_{1:K},w_{dn}) \propto \exp(\log \theta_{dk} + \log \beta_{k,w_{dn}})\)</span></p>
-<p><span class="math">\(p(\theta_d | z_d)=Dirichlet(\alpha+\sum^N_{n=1}z_{dn})\)</span></p>
-<p><span class="math">\(p(\beta_k | z,w)=Dirichlet(\eta +\sum^D_{d=1} \sum^N_{n=1}z^k_{dn}w_{dn})\)</span></p>
-<p>where <span class="math">\(d\)</span> is the document index in the corpus, <span class="math">\(n\)</span> is the word index in the vocabulary, and <span class="math">\(k\)</span> is the topic index.  As you can see, the complete conditionals of the local variables only depend on other local variables from the same local context (i.e. the same document) and the global variables, they do not depend on local variables from other documents.  As per mean-field variational inference, the variational distributions for these variables take the same form as their complete conditionals, that is</p>
-<p><span class="math">\(q(z_{dn})=Multinomial(\phi_{dn})\)</span></p>
-<p><span class="math">\(q(\theta_d)=Dirichlet(\gamma_d)\)</span></p>
-<p><span class="math">\(q(\beta_k)=Dirichlet(\lambda_k)\)</span></p>
-<p>Next we find the updates for each of these variational parameters by taking the expectation of the natural parameters of the complete conditionals which are</p>
-<p>
-<div class="math">$$\phi^k_{dn}=\exp(\Psi(\gamma_{dk})+\Psi(\lambda_{k,w_{dn}})-\Psi(\sum_v \lambda_{kv}))$$</div>
-</p>
-<p>
-<div class="math">$$\gamma_d=\alpha + \sum^N_{n=1}\phi_{dn}$$</div>
-</p>
-<p>
-<div class="math">$$\lambda_k=\beta+\sum^D_{d=1} \sum^N_{n=1}\phi^k_{dn}w_{dn}$$</div>
-</p>
-<p>Now let's use the procedure mapped out in the stochastic variational inference algorithm which is to first randomly sample a document from the corpus then update the local variational parameters <span class="math">\(\phi\)</span> (the topic assignments for each word) and <span class="math">\(\gamma\)</span> (the topic proportions for the document) for this document.  Then we update the variational parameters for the global topic distribution for that sampled document <span class="math">\(\lambda\)</span>.  Then we merge the global parameter for the sampled document with the overall global parameter (with an update weighted by <span class="math">\(\rho_t\)</span>).  We repeat this procedure until we think that convergence has occurred.  This procedure is better illustrated below.</p>
-<p><img alt="stochastic variational inference LDA" src="images/svi_lda.png" /> </p>
-<h2>Experimental Results</h2>
-<p>Scala code that implements stochastic variational inference for LDA can be found in this github repo (warning! experimental so use at your own risk).  In this experiment, we are using the NIPS dataset which consists of the abstracts of 1,736 NIPS papers however this algorithm could handle a much larger data set than this.  The following Scala code shows how we run this experiment.</p>
-<div class="highlight"><pre><span class="c1">//set location of directory containing data</span>
- <span class="k">val</span> <span class="n">docDirectory</span> <span class="k">=</span> <span class="s">&quot;NIPS_dataset/&quot;</span>
-
-<span class="c1">//create vocabulary from data with minimum frequency cutoff of 10</span>
- <span class="k">val</span> <span class="n">testVocab</span> <span class="k">=</span> <span class="nc">CountVocab</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">,</span> <span class="mi">10</span><span class="o">).</span><span class="n">getVocabulary</span>
-
-<span class="c1">//create a corpus object that can be streamed into online LDA model</span>
- <span class="k">val</span> <span class="n">testCorpus</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">StreamingCorpus</span><span class="o">(</span><span class="n">testVocab</span><span class="o">,</span> <span class="mi">5</span><span class="o">,</span> <span class="n">docDirectory</span><span class="o">)</span>
-
-<span class="c1">//create online LDA model object with 5 topics, a decay of 0.5 and 1736 documents</span>
-<span class="k">val</span> <span class="n">oldaTest</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">OnlineLDA</span><span class="o">(</span><span class="n">testCorpus</span><span class="o">,</span> <span class="mi">5</span><span class="o">,</span> <span class="mf">0.5</span><span class="o">,</span> <span class="mi">1736</span><span class="o">)</span>
-
-<span class="c1">//learn the model</span>
- <span class="n">oldaTest</span><span class="o">.</span><span class="n">inference</span><span class="o">()</span>
-
-<span class="c1">//show the topics by displaying the 10 most probable words in each topic</span>
- <span class="n">oldaTest</span><span class="o">.</span><span class="n">printTopics</span><span class="o">(</span><span class="mi">10</span><span class="o">)</span>
-</pre></div>
-
-
-<p>The resulting topics are shown below</p>
-<div class="highlight"><pre>Topic 1: state, learning, reinforcement, policy, action, control, actions, states, controller, robot
-
-Topic 2: recognition, speech, training, word, classifier, classification, classifiers, tree, words, hmm
-
-Topic 3: cells, neurons, cell, neuron, visual, response, figure, synaptic, model, activity
-
-Topic 4: network, learning, model, neural, data, networks, input, set, figure
-
-Topic 5: disparity, binding, similarity, protein, structural, clause, instruction, energy, structure, spin
-</pre></div>
-
-
-<p>If you have some background knowledge in the machine learning domain you can see that these five topics are both distinct and thematically coherent.  The topics appear to describe five different fields of machine learning. Topic 1 seems to describe <a href="http://en.wikipedia.org/wiki/Reinforcement_learning">reinforcement learning</a>, Topic 2 seems to describe <a href="http://en.wikipedia.org/wiki/Speech_recognition">speech recognition</a>, Topic 3 seems to describe <a href="http://en.wikipedia.org/wiki/Computational_neuroscience">neuroscience</a> in general, Topic 4 seems to describe <a href="http://en.wikipedia.org/wiki/Artificial_neural_network">neural networks</a>, and finally Topic 5 seems to describe the field of <a href="http://en.wikipedia.org/wiki/Bioinformatics">bioinformatics</a>.  Some of the topics contain redundant words but this can be reduced by preprocessing the vocabulary (eg. word stemming).</p>
-<h2>TL;DR</h2>
-<ul>
-<li>In traditional variational inference for LDA (and variational inference in general) we must iterate through the entire data set before we can update the global parameters.  This is slow and memory intensive.  It also turns out that it is unnecessary because the entire dataset contains redundant information - instead we can iteratively update our global parameters based on small samples from the data set.  This is much less memory intensive.</li>
-<li>In terms of LDA, this means that we can iteratively update our model by learning sequentially from small mini-batches of documents taken from the corpus.  This means that at any given time, we only need to keep a small mini-batch of documents in memory which means that we can scale our LDA model to an arbitrarily large corpus!</li>
-<li>Take a look at my <a href="https://github.com/alexminnaar/topic-models">experimental Scala</a> code that implements this.</li>
-</ul>
-<h2>References</h2>
-<ul>
-<li><a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CB8QFjAA&amp;url=https%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiBach2010b.pdf&amp;ei=Py88VJfcPIaeyASvkIDoCg&amp;usg=AFQjCNHLmU8Gk_P4usBj2QcGcaolw87w4w&amp;sig2=9dw5H6mIdznjjumz2nCY1g&amp;bvm=bv.77161500,d.aWw">Online Learning for Latent Dirichlet Allocation.  Hoffman, Blei, Bach.</a></li>
-<li><a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CCQQFjAA&amp;url=http%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiWangPaisley2013.pdf&amp;ei=ci88VIuwKof5yAS2i4II&amp;usg=AFQjCNFDdMC1UFSKbIMPm8PSFWsuqnl4qg&amp;sig2=wxaruB5M5pLC5Tc_3QgxrA&amp;bvm=bv.77161500,d.aWw">Stochastic Variational Inference. Hoffman, Blei, Wang, Paisley.</a></li>
-<li><a href="http://msc-ai-thesis-christiaan-meijer.googlecode.com/svn-history/trunk/Literature/Amari%20-%20Natural%20Gradient%20works%20efficiently%20in%20learning.pdf">Natural Gradient Works Efficiently in Learning. Amari.</a></li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-08-10T00:00:00+02:00">
-          on&nbsp;Sun 10 August 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><p>The theory behind Latent Dirichlet Allocation was outlined in the the <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">previous blog post</a>.  Now the goal is to translate this theory into a fully-fledged Scala application.  There are two main entities in the LDA algorithm</p>
-<ol>
-<li><strong>The Corpus:</strong>  This is the collection of documents.  Functionality is needed to accept documents from the user, create a vocabulary, perform text preprocessing, maintain document-level and corpus-level word counts, and returning the desired output back to the user.</li>
-<li><strong>Inference:</strong>  The core aspect of this algorithm is the collapsed Gibbs sampling inference step.  This must be implemented efficiently and correctly.</li>
-</ol>
-<h2>The Corpus</h2>
-<h3>Getting a vocabulary</h3>
-<p>The first task that the corpus class must undertake is getting a vocabulary from the given documents.  Stop words must be removed and we also want to remove low-frequency words (these words would most likely not show up in any topics anyway so it is best to remove them for memory-management reasons).  The low-frequency cut-off threshold should be supplied by the user.  In order to determine the low-frequency words, a corpus-wide word count must be performed.  Also, it is good practice to remove stop words and words that are either too short or too long.  The following <code>CountVocab</code> class performs the required word count, then removes words that are too infrequent, are part of a stop word list, or are not within the allowable length bounds.</p>
-<div class="highlight"><pre><span class="k">class</span> <span class="nc">CountVocab</span><span class="o">(</span><span class="n">filePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">minCount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Vocabulary</span> <span class="o">{</span>
-
-  <span class="k">val</span> <span class="n">stopWords</span> <span class="k">=</span> <span class="nc">Source</span><span class="o">.</span><span class="n">fromURL</span><span class="o">(</span><span class="n">getClass</span><span class="o">.</span><span class="n">getResource</span><span class="o">(</span><span class="s">&quot;/english_stops_words.txt&quot;</span><span class="o">)).</span><span class="n">mkString</span><span class="o">.</span><span class="n">split</span><span class="o">(</span><span class="s">&quot;\n&quot;</span><span class="o">).</span><span class="n">toSet</span>
-
-  <span class="k">def</span> <span class="n">getVocabulary</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
-
-    <span class="k">var</span> <span class="n">vocabulary</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="nc">HashMap</span><span class="o">.</span><span class="n">empty</span>
-    <span class="k">var</span> <span class="n">wordCounter</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="nc">HashMap</span><span class="o">.</span><span class="n">empty</span>
-
-    <span class="k">def</span> <span class="n">countWords</span><span class="o">(</span><span class="n">docFile</span><span class="k">:</span> <span class="kt">File</span><span class="o">)</span> <span class="o">{</span>
-
-      <span class="k">val</span> <span class="n">tokens</span> <span class="k">=</span> <span class="nc">StanfordTokenizer</span><span class="o">.</span><span class="n">tokenizeFile</span><span class="o">(</span><span class="n">docFile</span><span class="o">)</span>
-
-      <span class="k">for</span> <span class="o">(</span><span class="n">token</span> <span class="k">&lt;-</span> <span class="n">tokens</span><span class="o">)</span> <span class="o">{</span>
-
-        <span class="k">if</span> <span class="o">(</span><span class="n">wordCounter</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">{</span>
-          <span class="n">wordCounter</span> <span class="o">+=</span> <span class="o">(</span><span class="n">token</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">wordCounter</span><span class="o">(</span><span class="n">token</span><span class="o">)</span> <span class="o">+</span> <span class="mi">1</span><span class="o">))</span>
-        <span class="o">}</span>
-        <span class="k">else</span> <span class="k">if</span> <span class="o">(!</span><span class="n">stopWords</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">token</span><span class="o">.</span><span class="n">matches</span><span class="o">(</span><span class="s">&quot;\\p{Punct}&quot;</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="n">token</span><span class="o">.</span><span class="n">length</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">&amp;&amp;</span> <span class="n">token</span><span class="o">.</span><span class="n">length</span> <span class="o">&lt;</span> <span class="mi">15</span> <span class="o">&amp;&amp;</span> <span class="n">token</span> <span class="o">!=</span> <span class="s">&quot;-lrb-&quot;</span> <span class="o">&amp;&amp;</span> <span class="n">token</span> <span class="o">!=</span> <span class="s">&quot;-rrb-&quot;</span><span class="o">)</span> <span class="o">{</span>
-          <span class="n">wordCounter</span> <span class="o">+=</span> <span class="o">(</span><span class="n">token</span> <span class="o">-&gt;</span> <span class="mi">1</span><span class="o">)</span>
-        <span class="o">}</span>
-      <span class="o">}</span>
-    <span class="o">}</span>
-
-    <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">filePath</span><span class="o">).</span><span class="n">listFiles</span><span class="o">.</span><span class="n">toIterator</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">isFile</span><span class="o">).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">docFile</span> <span class="k">=&gt;</span> <span class="n">countWords</span><span class="o">(</span><span class="n">docFile</span><span class="o">))</span>
-
-    <span class="k">for</span> <span class="o">((</span><span class="n">w</span><span class="o">,</span> <span class="n">freq</span><span class="o">)</span> <span class="k">&lt;-</span> <span class="n">wordCounter</span><span class="o">)</span> <span class="o">{</span>
-      <span class="k">if</span> <span class="o">(</span><span class="n">freq</span> <span class="o">&gt;=</span> <span class="n">minCount</span><span class="o">)</span> <span class="o">{</span>
-        <span class="n">vocabulary</span> <span class="o">+=</span> <span class="o">(</span><span class="n">w</span> <span class="o">-&gt;</span> <span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span><span class="o">)</span>
-      <span class="o">}</span>
-    <span class="o">}</span>
-
-    <span class="n">vocabulary</span>
-  <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
-
-
-<p>The above function takes a file path as an input parameter that points to the directory containing the documents (in text file format) on which you are going to perform LDA.  It also takes a frequency threshold parameter, below which a word is deemed too infrequent to be useful.  There is a nested function that performs a word count on the important words (tokenized with the Stanford coreNLP tokenizer), then we iterate through the counted words and keep the ones above the frequency threshold.  Also, we create a hashmap where every word we keep is mapped to a unique integer ID which will be used later.</p>
-<h3>Keeping Track of the Topic Assignment Counts</h3>
-<p>From <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I</a>, we learned that the probabilities that we are interested in are dependent upon the topics that are assigned to each word in the corpus.  During the Gibbs sampling procedure, the topic assignments are constantly being updated and the conditional distribution that is being sampled from also needs to be updated to reflect the new topic assignments.  Therefore, we need a way of keeping tack of these topic assignment counts.  This will be done with two matrices (using the <a href="https://github.com/scalanlp/breeze">Breeze</a> linear algebra library) - a topic/word matrix that counts how many times each word is assigned to each topic, and a document/topic matrix that counts how many words each topic is assigned to in each document.  Furthermore, we need to initialize the Gibbs sampling procedure by randomly assigning each word to a topic.  This is all done in the following <code>CollapsedLDACorpus</code> class.</p>
-<div class="highlight"><pre><span class="k">class</span> <span class="nc">CollapsedLDACorpus</span><span class="o">(</span><span class="n">vocab</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">],</span> <span class="n">numTopics</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">docDirectory</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Corpus</span> <span class="o">{</span>
-
-  <span class="k">val</span> <span class="n">numDocs</span> <span class="k">=</span> <span class="nc">DocUtils</span><span class="o">.</span><span class="n">numDocs</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">)</span>
-  <span class="k">val</span> <span class="n">vocabulary</span> <span class="k">=</span> <span class="n">vocab</span>
-  <span class="k">var</span> <span class="n">docTopicMatrix</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numDocs</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">)</span>
-  <span class="k">var</span> <span class="n">topicWordMatrix</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numTopics</span><span class="o">,</span> <span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span><span class="o">)</span>
-  <span class="k">var</span> <span class="n">words</span><span class="k">:</span> <span class="kt">Vector</span><span class="o">[</span><span class="kt">Word</span><span class="o">]</span> <span class="k">=</span> <span class="nc">Vector</span><span class="o">.</span><span class="n">empty</span>
-
-  <span class="k">val</span> <span class="n">randomTopicGenerator</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Random</span>
-  <span class="k">var</span> <span class="n">docIndex</span> <span class="k">=</span> <span class="mi">0</span>
-
-  <span class="k">def</span> <span class="n">processDoc</span><span class="o">(</span><span class="n">contents</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span>
-
-    <span class="k">val</span> <span class="n">tokens</span> <span class="k">=</span> <span class="nc">StanfordTokenizer</span><span class="o">.</span><span class="n">tokenizeString</span><span class="o">(</span><span class="n">contents</span><span class="o">)</span>
-
-    <span class="k">for</span> <span class="o">(</span><span class="n">token</span> <span class="k">&lt;-</span> <span class="n">tokens</span><span class="o">)</span> <span class="o">{</span>
-
-      <span class="k">val</span> <span class="n">randTopic</span> <span class="k">=</span> <span class="n">randomTopicGenerator</span><span class="o">.</span><span class="n">nextInt</span><span class="o">(</span><span class="n">numTopics</span><span class="o">)</span>
-
-      <span class="k">if</span> <span class="o">(</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">{</span>
-
-        <span class="c1">//Assign the word to a random topic</span>
-        <span class="n">words</span> <span class="o">:+=</span> <span class="nc">Word</span><span class="o">(</span><span class="n">token</span><span class="o">,</span> <span class="n">docIndex</span><span class="o">,</span> <span class="n">randTopic</span><span class="o">)</span>
-        <span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">docIndex</span><span class="o">,</span> <span class="n">randTopic</span><span class="o">)</span> <span class="o">+=</span> <span class="mf">1.0</span>
-        <span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">randTopic</span><span class="o">,</span> <span class="n">vocabulary</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">+=</span> <span class="mf">1.0</span>
-      <span class="o">}</span>
-    <span class="o">}</span>
-    <span class="n">docIndex</span> <span class="o">+=</span> <span class="mi">1</span>
-  <span class="o">}</span>
-
-  <span class="k">def</span> <span class="n">initialize</span> <span class="k">=</span> <span class="o">{</span>
-    <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">).</span><span class="n">listFiles</span><span class="o">.</span><span class="n">toIterator</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">getName</span><span class="o">.</span><span class="n">endsWith</span><span class="o">(</span><span class="s">&quot;.txt&quot;</span><span class="o">)).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">docFile</span> <span class="k">=&gt;</span> <span class="n">processDoc</span><span class="o">(</span><span class="n">fromFile</span><span class="o">(</span><span class="n">docFile</span><span class="o">).</span><span class="n">getLines</span><span class="o">().</span><span class="n">mkString</span><span class="o">))</span>
-  <span class="o">}</span>
-
-  <span class="k">def</span> <span class="n">reverseVocab</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">Int</span>, <span class="kt">String</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
-    <span class="n">vocabulary</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="k">_</span> <span class="n">swap</span><span class="o">)</span>
-  <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
-
-
-<p>There is also an <code>processDoc</code> function that assigns each word in the document (that is in the vocabulary) to a random topic and increments the corresponding entries <code>docTopicMatrix</code> and <code>topicWordMatrix</code>.  The topic assignments are assigned within objects of a case class called <code>Word</code> that maintains the state of each word.</p>
-<div class="highlight"><pre><span class="k">case</span> <span class="k">class</span> <span class="nc">Word</span><span class="o">(</span><span class="n">token</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">doc</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="k">var</span> <span class="n">topic</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
-</pre></div>
-
-
-<p>The state of a word is its assigned topic, the document that it appears in, and the actual string value of the word itself.</p>
-<h2>Inference</h2>
-<p>The collapsed Gibbs sampling inference algorithm was described in detail in <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I of this blog post</a>.  In short, topic assignments are repeatedly sampled from a conditional distribution and after enough samples have been performed, it is assumed that the samples are taken from the posterior distribution over topic assignments.  Then, the <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> probabilities can be computed from these inferred topic assignments.  The following <code>collapsedGibbs</code> class performs this these tasks.</p>
-<div class="highlight"><pre><span class="k">class</span> <span class="nc">CollapsedGibbs</span><span class="o">(</span><span class="n">corpus</span><span class="k">:</span> <span class="kt">CollapsedLDACorpus</span><span class="o">,</span> <span class="n">docDirectory</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">vocabThreshold</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">K</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">alpha</span><span class="k">:</span> <span class="kt">Double</span><span class="o">,</span> <span class="n">beta</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">TopicModel</span> <span class="o">{</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * For a given word, calculate the conditional distribution over topic assignments to be sampled from.</span>
-<span class="cm">   * @param word word whose topic will be inferred from the Gibb&#39;s sampler.</span>
-<span class="cm">   * @return distribution over topics for the word input.</span>
-<span class="cm">   */</span>
-  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">gibbsDistribution</span><span class="o">(</span><span class="n">word</span><span class="k">:</span> <span class="kt">Word</span><span class="o">)</span><span class="k">:</span> <span class="kt">Multinomial</span><span class="o">[</span><span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
-
-    <span class="k">val</span> <span class="n">docTopicRow</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span>
-    <span class="k">val</span> <span class="n">topicWordCol</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(::,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span>
-    <span class="k">val</span> <span class="n">topicSums</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">,</span> <span class="nc">Axis</span><span class="o">.</span><span class="n">_1</span><span class="o">)</span>
-    <span class="k">val</span> <span class="n">params</span> <span class="k">=</span> <span class="o">(</span><span class="n">docTopicRow</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">)</span> <span class="o">:*</span> <span class="o">(</span><span class="n">topicWordCol</span> <span class="o">+</span> <span class="n">beta</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">topicSums</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">beta</span><span class="o">)</span>
-
-    <span class="c1">//normalize parameters</span>
-    <span class="k">val</span> <span class="n">normalizingConstant</span> <span class="k">=</span> <span class="n">sum</span><span class="o">(</span><span class="n">params</span><span class="o">)</span>
-    <span class="k">val</span> <span class="n">normalizedParams</span> <span class="k">=</span> <span class="n">params</span> <span class="o">:/</span> <span class="n">normalizingConstant</span>
-
-    <span class="nc">Multinomial</span><span class="o">(</span><span class="n">normalizedParams</span><span class="o">)</span>
-  <span class="o">}</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * Gibbs sampler for LDA</span>
-<span class="cm">   * @param numIter number of iterations that Gibbs sampler will be run</span>
-<span class="cm">   */</span>
-  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">gibbsSample</span><span class="o">(</span><span class="n">numIter</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="mi">200</span><span class="o">)</span> <span class="o">{</span>
-
-    <span class="k">for</span> <span class="o">(</span><span class="n">iter</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numIter</span><span class="o">)</span> <span class="o">{</span>
-
-      <span class="n">println</span><span class="o">(</span><span class="n">iter</span><span class="o">)</span>
-
-      <span class="k">for</span> <span class="o">(</span><span class="n">word</span> <span class="k">&lt;-</span> <span class="n">corpus</span><span class="o">.</span><span class="n">words</span><span class="o">)</span> <span class="o">{</span>
-
-        <span class="k">val</span> <span class="n">multinomialDist</span> <span class="k">=</span> <span class="n">gibbsDistribution</span><span class="o">(</span><span class="n">word</span><span class="o">)</span>
-
-        <span class="k">val</span> <span class="n">oldTopic</span> <span class="k">=</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span>
-
-        <span class="c1">//reassign word to topic determined by sample</span>
-        <span class="n">word</span><span class="o">.</span><span class="n">topic</span> <span class="k">=</span> <span class="n">multinomialDist</span><span class="o">.</span><span class="n">draw</span><span class="o">()</span>
-
-        <span class="c1">//If topic assignment has changed, must also change count matrices</span>
-        <span class="k">if</span> <span class="o">(</span><span class="n">oldTopic</span> <span class="o">!=</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">)</span> <span class="o">{</span>
-
-          <span class="c1">//increment counts to due to reassignment to new topic</span>
-          <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span> <span class="o">+=</span> <span class="mf">1.0</span>
-          <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">)</span> <span class="o">+=</span> <span class="mf">1.0</span>
-
-          <span class="c1">//decrement counts of old topic assignment that has been changed</span>
-          <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">oldTopic</span><span class="o">,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span> <span class="o">-=</span> <span class="mf">1.0</span>
-          <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="n">oldTopic</span><span class="o">)</span> <span class="o">-=</span> <span class="mf">1.0</span>
-
-        <span class="o">}</span>
-      <span class="o">}</span>
-    <span class="o">}</span>
-  <span class="o">}</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * Calculate theta matrix directly from doc/topic counts.  Overwrite counts matrix to save memory.</span>
-<span class="cm">   */</span>
-  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">getTheta</span> <span class="o">{</span>
-
-    <span class="c1">//we turn the counts matrix into a probability matrix</span>
-    <span class="k">for</span> <span class="o">(</span><span class="n">doc</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">corpus</span><span class="o">.</span><span class="n">numDocs</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
-
-      <span class="k">val</span> <span class="n">countToProb</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">((</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::)</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">)</span> <span class="o">+</span> <span class="n">K</span> <span class="o">*</span> <span class="n">alpha</span><span class="o">)).</span><span class="n">t</span>
-      <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">countToProb</span><span class="o">.</span><span class="n">t</span>
-    <span class="o">}</span>
-  <span class="o">}</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * Calculate phi matric directly from topic/word counts.  Overwrite counts matrix to save memory.</span>
-<span class="cm">   */</span>
-  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">getPhi</span> <span class="o">{</span>
-
-    <span class="c1">//we turn the counts matrix into a probability matrix</span>
-    <span class="k">for</span> <span class="o">(</span><span class="n">topic</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">K</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
-
-      <span class="k">val</span> <span class="n">countToProb</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">((</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::)</span> <span class="o">+</span> <span class="n">beta</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">)</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">beta</span><span class="o">)).</span><span class="n">t</span>
-      <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">countToProb</span><span class="o">.</span><span class="n">t</span>
-    <span class="o">}</span>
-  <span class="o">}</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * Perform all inference steps - gibbs sampling, calculating theta matrix, calculating phi matrix.</span>
-<span class="cm">   */</span>
-  <span class="k">def</span> <span class="n">inference</span> <span class="o">{</span>
-    <span class="n">gibbsSample</span><span class="o">()</span>
-    <span class="n">getTheta</span>
-    <span class="n">getPhi</span>
-  <span class="o">}</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * Print topics found by LDA algorithm.</span>
-<span class="cm">   * @param numWords Determines how many words to display for each topic.</span>
-<span class="cm">   */</span>
-  <span class="k">def</span> <span class="n">printTopics</span><span class="o">(</span><span class="n">numWords</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="o">{</span>
-
-    <span class="c1">//want to actually show the words, so we need to extract strings from ids</span>
-    <span class="k">val</span> <span class="n">revV</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">reverseVocab</span>
-
-    <span class="k">for</span> <span class="o">(</span><span class="n">topic</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">K</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
-
-      <span class="c1">//tie probability to column index, then sort by probabiltiy, take the top numWords, map column index to corresponding word</span>
-      <span class="n">println</span><span class="o">(</span><span class="s">&quot;Topic #&quot;</span> <span class="o">+</span> <span class="n">topic</span> <span class="o">+</span> <span class="s">&quot;:  &quot;</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">sortBy</span><span class="o">(-</span><span class="k">_</span><span class="o">.</span><span class="n">_1</span><span class="o">).</span><span class="n">take</span><span class="o">(</span><span class="n">numWords</span><span class="o">).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">revV</span><span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">_2</span><span class="o">)))</span>
-
-    <span class="o">}</span>
-  <span class="o">}</span>
-
-  <span class="cm">/**</span>
-<span class="cm">   * For a given document, display most likely topics occurring in it.</span>
-<span class="cm">   * @param docIndex index of document to be analyzed.</span>
-<span class="cm">   * @param probCutoff Determines how likely a topic has to be for it to be displayed.</span>
-<span class="cm">   */</span>
-  <span class="k">def</span> <span class="n">printTopicProps</span><span class="o">(</span><span class="n">docIndex</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">probCutoff</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="o">{</span>
-
-    <span class="c1">//tie probability to column index, filter probabilities by probCutoff</span>
-    <span class="n">println</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">docIndex</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">_1</span> <span class="o">&gt;</span> <span class="n">probCutoff</span><span class="o">).</span><span class="n">toList</span><span class="o">)</span>
-
-  <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
-
-
-<p>The full inference procedure is performed in the <code>inference</code> method. First the Gibbs sampling procedure is performed.  This is done by iterating over each word in the corpus and during each iteration, the conditional probability distribution over all topics for that word is calculated with the following equation from <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I</a>,</p>
-<p>
-<div class="math">$$P(z_i=j|z_{-i},w) \propto \frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}$$</div>
-</p>
-<p>This is done in the method called <code>gibbsDistribution</code>.  The distribution is returned as a Multinomial distribution (see the scaladocs for <a href="http://www.scalanlp.org/api/breeze/#breeze.stats.distributions.package">Breeze Multinomial distribution</a>).  Then a new topic is sampled from this multinomial distribution and assigned to the word object.  And finally, the doc/topic and topic/word counts are updated to reflect this new assignment (where the word ID from vocabulary is used to associate words with columns in the topic/word matrix).  This sampling procedure runs for 10,000 iterations (so that we can be sure that MCMC convergence has occurred).  The next step in <code>inference</code> is to calculate the <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> probability matrices.  This is done using the count matrices and the following equations from part I,</p>
-<p><span class="math">\(\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}\)</span> and <span class="math">\(\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}\)</span></p>
-<p>The count matrices are transformed into probability matrices in place to save on memory.  The <code>printTopics</code> method prints the topics found from the <span class="math">\(\theta\)</span> matrix in terms of the most likely words for each topic.  The <code>printTopicProps</code> method prints the most likely topics for a particular document within the corpus from the <span class="math">\(\phi\)</span> matrix.</p>
-<p>Hopefully this series of blog posts has shed some light on some of the mysteries of Latent Dirichlet Allocation.  The above code snippets were taken from my Scala implementation that you can find at my <a href="https://github.com/alexminnaar/ScalaTopicModels">ScalaTopicModels github repo</a>.</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
  
 <div class="paginator">
-    <div class="navButton">Page 1 / 3</div>
+    <div class="navButton">Page 1 / 4</div>
         <div class="navButton"><a href="/index2.html" >Next</a></div>
 </div>
                 </div>
