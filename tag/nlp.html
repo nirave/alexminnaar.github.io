@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
                 <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
                 <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
                 <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
@@ -60,6 +61,61 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/replicating-the-nrc-state-of-the-art-sentiment-analyzer.html">Replicating the NRC State-of-the-Art Sentiment Analyzer</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-01-05T00:00:00+01:00">
+          on&nbsp;Mon 05 January 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>The Drawbacks of Stanford's Deep Learning Sentiment Analysis Tool</h2>
+<p>Stanford has released an interesting <a href="http://nlp.stanford.edu/sentiment/index.html">sentiment analysis tool</a> as part of their great <a href="http://nlp.stanford.edu/software/corenlp.shtml">CoreNLP package</a>.  It is based on a recursive deep learning model that takes into account the semantic structure of the entire sentence rather than simply summing the positive and negative sentiments of the words that appear in it.  This idea is very promising.  Clearly a sentence's structure contains a lot of usefull information that could be used for determining its sentiment. Unfortunately, it has a few drawbacks which prevent it from being my sentiment analyzer of choice.</p>
+<ul>
+<li><strong>Training Data:</strong>  The out-of-the-box sentiment model that this tool comes with was trained using the <a href="http://nlp.stanford.edu/sentiment/treebank.html">Sentiment Treebank</a> dataset which is composed of 9,645 sentences.  If you look at some of these sentences you will quickly see that they are very well structured in terms of spelling and grammatical correctness.  In contrast, most social media text is not so well structured (eg. misspellings, grammar mistakes, abbreviations, slang, emoticons etc.).  Obviously, if the data with which you train your model is different from the data on which you apply that model, you cannot expect to observe good performance.</li>
+<li><strong>Out-of-Vocabulary Words:</strong>  This drawback is closely related to the previous one.  Oftentimes sentences contain words that are <em>out-of-vocabulary</em> (sometimes called OOV words) which are words that are not contained in your dictionary of known words (eg. misspellings, rare words, slang etc.).  It is very difficult to build a semantic model of of a sentences structure if it contains OOV words.  It is very possible that one word could change a sentence's structure entirely and if that word is OOV it is very likely that your structure model could be wrong.  For this reason, a sentiment model based on sentence structure could be problematic.</li>
+<li><strong>Tokenization:</strong>  Stanford's sentiment analysis tool makes use of the <a href="http://nlp.stanford.edu/software/tokenizer.shtml">Stanford Tokenizer</a>.  A major problem with the Stanford tokenizer is that it almost always tokenizes emoticons incorrectly.  For example, it will split the classic smiley emoticon ":)" into a ":" token followed by a separate ")" token.  Obviously emoticons can convey a great deal of information regarding sentiment (particulary in short sentences such as tweets) so ignoring them is a big problem.</li>
+</ul>
+<h2>The NRC Strategy: Lexicons, Lexicons, Lexicons!</h2>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/building-a-named-entity-recognition-system-tips-and-best-practices.html">Building a Named Entity Recognition System: Tips and Best Practices</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-11-11T00:00:00+01:00">
+          on&nbsp;Tue 11 November 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info -->
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
         
         
 
@@ -590,248 +646,6 @@ Topic 5: disparity, binding, similarity, protein, structural, clause, instructio
 <p><span class="math">\(\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}\)</span> and <span class="math">\(\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}\)</span></p>
 <p>The count matrices are transformed into probability matrices in place to save on memory.  The <code>printTopics</code> method prints the topics found from the <span class="math">\(\theta\)</span> matrix in terms of the most likely words for each topic.  The <code>printTopicProps</code> method prints the most likely topics for a particular document within the corpus from the <span class="math">\(\phi\)</span> matrix.</p>
 <p>Hopefully this series of blog posts has shed some light on some of the mysteries of Latent Dirichlet Allocation.  The above code snippets were taken from my Scala implementation that you can find at my <a href="https://github.com/alexminnaar/ScalaTopicModels">ScalaTopicModels github repo</a>.</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-06-22T00:00:00+02:00">
-          on&nbsp;Sun 22 June 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><p>I wanted to write a two-part blog post on Latent Dirichlet Allocation.  When I was first learning about this algorithm I became somewhat frustrated because it seemed that many learning resources either explained the theory behind Latent Dirichlet Allocation or provided code but none actually explained the connection between the two.  In other words, it was difficult for me to identify the various aspects of the theory behind Latent Dirichlet Allocation algorithm in the code itself.  So the goal of these two blog posts is to both explain the theory behind Latent Dirichlet Allocation and specifically how that theory can be transformed into implementable code.  In this case, I will be using the Scala programming language because that is what I am currently working with professionally.</p>
-<p>This first blog entry will focus on the theory behind LDA and the <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">next post</a> will focus on its transformation into implementable code.</p>
-<h2>Why Learn about Latent Dirichlet Allocation (LDA)?</h2>
-<p>There are many reasons to want to learn about LDA such as</p>
-<ol>
-<li>What it does is very useful.  Given a set of documents, it assigns to each topic a distribution over words and to each document a distribution over topics in a completely unsupervised way.  So essentially, it is a way to figure out what each document in a set of documents is about without having to actually read them!  For that reason, it is a great tool to use for a multitude of text categorization tasks.</li>
-<li>It is a great practical example of Bayesian inference.  If you are looking to improve your understand Bayesian inference, understanding LDA would definitely help with this.</li>
-</ol>
-<h2>Probability Distributions involved in LDA</h2>
-<p>The two probability distributions used in LDA are the multinomial distribution and the Dirichlet distribution.</p>
-<h3>The Multinomial Distribution</h3>
-<p>The multinomial distribution models the histogram of outcomes of an experiment with <span class="math">\(k\)</span> possible outcomes that is performed <span class="math">\(T\)</span> times.  The parameters of this distribution are the probabilities of each of the <span class="math">\(k\)</span> possible outcomes occurring in a single trial, <span class="math">\(p_1,...,p_k\)</span>.  This is a discrete, multi-variate distribution with probability mass function</p>
-<p><span class="math">\(P(x_1,...,x_k |T,p_1,...,p_k)=\frac{T!}{\prod_{i=1}^kx_i!}p_i^{x_i}\)</span> where <span class="math">\(x_i \geq 0\)</span></p>
-<p>A good example of how the multinomial distribution is used is to think of rolling a dice several times.  Say you want to know the probability of rolling 3 fours, 2 sixes, and 4 ones in 9 total rolls given that you know the probability of landing on each side of the dice.  The multinomial distribution models this probability.</p>
-<h3>The Dirichlet Distribution</h3>
-<p>It is obvious from its name that the Dirichlet distribution is involved in Latent Dirichlet Allocation.  The Dirichlet distribution is sometimes difficult to understand because it deals with distributions over the probability simplex.  What this means is that the Dirichlet distribution is a distribution over discrete probability distributions.  Its probability mass function is</p>
-<p><span class="math">\(P(P=\{p_i\}|\alpha_i)=\frac{\prod_i \Gamma(\alpha_i)}{\Gamma(\sum_i \alpha_i)}\prod_ip_i^{\alpha_i-1}\)</span>  where <span class="math">\(\sum_ip_i=1\)</span> and <span class="math">\(p_i \geq 0\)</span></p>
-<p>The key to understanding the Dirichlet distribution is realizing that instead of it being a distribution over events or counts (as most probability distributions are), it is a distribution over discrete probability distributions (eg. multinomials).</p>
-<p>Another important note is that the Dirichlet distribution is the conjugate prior to the multinomial distribution.  This means that the posterior distribution for a multinomial likelihood with a Dirichlet prior over its parameters is also a Dirichlet distribution.  In fact, the posterior is the following Dirichlet distribution</p>
-<p><span class="math">\(P(p_1,...,p_k|x_1,...x_k)=\frac{\prod_i \Gamma(\alpha_i+x_i)}{\Gamma(N+\sum_i \alpha_i)}\prod_ip_i^{\alpha_i+x_i-1}\)</span></p>
-<p>The proof is not shown here but it can be derived by multiplying the multinomial likelihood with the Dirichlet prior in a straight-forward way.</p>
-<h2>The LDA Generative Model</h2>
-<p>LDA uses what is called a generative model as a means to explain how the observed words in a corpus are generated from an underlying latent structure.  The following picture shows how this generative model works.</p>
-<p><img alt="alt text" src="images/smoothed_lda.png" title="lda graphical model" /> </p>
-<p>This may look complicated at first but every part of this model can be explained. Node <span class="math">\(w\)</span> represents the observed words in the corpus.  It is shaded to indicate that it is observed and not a latent variable.  But before we explore the other nodes in the model, the intuition behind the generative model should be explained.  LDA makes the assumption that a document in a corpus is a distribution over topics and a topic is a distribution over words.  So given a distribution over topics for a particular document, the actual words that appear in the document are generated by first sampling a topic from the distribution over topics then sampling a word from the sampled topic which is itself a distribution over words.  This is a somewhat natural way to think about documents.  A document can contain several different topics with varying proportions and some words are more associated with some topics than others.</p>
-<p>Now let's get back into the generative model.  Instead of starting with <span class="math">\(w\)</span> the observed word node, let's start at the outside.  Both <span class="math">\(\beta\)</span> and <span class="math">\(\alpha\)</span> are each parameters of two separate Dirichlet distributions which are represented by the two outer nodes in the generative model.  These two Dirichlet distributions are priors for two multinomial distributions which are parameterized by <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> where <span class="math">\(Multinomial(\theta)\)</span> is the distribution over topics for a given document and <span class="math">\(Multinomial(\phi)\)</span> is the distribution over words for a given topic.  And since there are <span class="math">\(K\)</span> topics and <span class="math">\(M\)</span> documents, there are <span class="math">\(M\)</span> <span class="math">\(\theta\)</span> vectors, each of which are <span class="math">\(K\)</span> elements in length.  Similarly, since there are <span class="math">\(N\)</span> unique words in the corpus, there are <span class="math">\(K\)</span> <span class="math">\(\phi\)</span> vectors, each of which are <span class="math">\(N\)</span> elements in length.  A good way to think of these parameters is as two matrices.</p>
-<p><img alt="alt text" src="images/theta.png" title="theta" /> </p>
-<p><img alt="alt text" src="images/phi.png" title="phi" /> </p>
-<p>Where each row is a parameterization of a multinomial distribution.  It also probably important to note that in the previous section the multinomial distribution was said to have a parameter <span class="math">\(T\)</span> representing the number of trials.  In the case of LDA, <span class="math">\(T=1\)</span> (sometimes this is called a categorical distribution rather than a multinomial distribution).  And finally, <span class="math">\(Z\)</span> is the topic assigned to word <span class="math">\(w\)</span>.</p>
-<p>So, in summary, the generative process is the following.</p>
-<ol>
-<li>All of the Multinomical parameter vectors for all documents <span class="math">\(\theta\)</span> are each sampled from <span class="math">\(Dir(\alpha)\)</span>.</li>
-<li>The other Mutlinomial parameter vectors for all topics <span class="math">\(\phi\)</span> are each sampled from <span class="math">\(Dir(\beta)\)</span>.</li>
-<li>The for each word index <span class="math">\(n\)</span> in document <span class="math">\(i\)</span> where <span class="math">\(i \in \{1,...,M\}\)</span>.<ol>
-<li>The topic assignment for <span class="math">\(n\)</span>, <span class="math">\(z_{n,i}\)</span> is sampled from the Multinomial distribution with parameter <span class="math">\(\theta_i\)</span> corresponding to document <span class="math">\(i\)</span>.</li>
-<li>The word with index <span class="math">\(n\)</span> is sampled from the Multinomial distributinon with parameter determined from the topic that was sampled in the last step <span class="math">\(\phi_{z_n,i}\)</span>.</li>
-</ol>
-</li>
-</ol>
-<p>And given the above graphical model, it is straight-forward to show that the joint distribution is</p>
-<p><span class="math">\(P(\theta,\phi,Z,W|\alpha,\beta)=\prod_{j=1}^KP(\phi_j|\beta)\prod_{i=1}^MP(\theta_i|\alpha)\prod_{n=1}^NP(z_{i,n}|\theta_i)P(w_{i,n}|z_{i,n},\phi_{z_{i,n}})\)</span></p>
-<p>Therefore, the ultimate goal is to determine the unknown, hidden parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span>.  This is done is through a process known as probabilistic inference.  What this basically means is, given that we know the general structure of how the documents are generated and we also know the words that are present in each document, can we work backwards and find the most likely parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span> that could have generated these documents?  The next section explains how this inference process is carried out for the LDA model.</p>
-<h2>Inference - Collapsed Gibbs Sampling</h2>
-<p>We want to know the latent parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span> which represent the topic distributions for each document, the word distributions for each topic and the topic assignments for each word respectively.  But the only information that we initially have is how many times each word appears in each document (LDA uses a bag-of-words approach).  So we need to infer these latent parameters from the observed data.  This means that we want to know <span class="math">\(P(\theta,\phi,Z|W)\)</span> which is known as the posterior distribution.  From the joint distribution shown above, the posterior distribution can be written as</p>
-<p><span class="math">\(P(\theta,\phi,Z) | W)=\frac{P(\theta,\phi,Z,W|\alpha,\beta)}{P(W|\alpha,\beta)}\)</span></p>
-<p>But it turns out that the denominator <span class="math">\(P(W|\alpha,\beta)\)</span> is intractable so we cannot compute the posterior is this usual way.  This tends to happen a lot in Bayesian inference, so there are a class of approximate inference methods that attempt to compute a distribution that is close to the actual posterior (but much easier to calculate).  In the case of LDA, the original paper by Blei et al. used variational inference to approximate the posterior.  But since then, collapsed Gibbs sampling (a MCMC inference technique) has been more commonly used to do this.  Before we get into the particular collapsed Gibbs sampling inference algorithm, it would be useful to have a quick review of Gibbs sampling and MCMC methods in general.</p>
-<h3>Gibbs Sampling</h3>
-<p>Gibbs sampling is part of a class of approximate inference methods known as Markov Chain Monte Carlo (MCMC) methods.  Generally speaking, MCMC methods work by creating a Markov Chain whose stationary distribution is the posterior distribution that we are looking for.  Consequently, if you simulate this Markov chain, eventually the state of the Markov chain will look like samples from the desired posterior distribution and given these samples you can get a good idea of what the posterior distribution looks like.  Gibbs sampling specifies a particular way of constructing this Markov chain. Say your target distribution is <span class="math">\(P(\textbf{x})=P(x_1,...,x_n)\)</span> but there is no closed form solution for <span class="math">\(P(\textbf{x})\)</span> (like our posterior distribution) so you cannot sample from it directly.  In Gibbs sampling, if you can sample from the conditional distribution <span class="math">\(P(x_i |x_{-i})\)</span>, a Markov chain can be constructed such that the samples from the conditionals converge to samples from the joint (i.e. the target distribution).    The Markov chain progresses as follows </p>
-<ol>
-<li>Randomly intialize the first sample <span class="math">\((x_1,...,x_n)\)</span></li>
-<li>For each cycle <span class="math">\(t\)</span> until convergence.<ol>
-<li>sample <span class="math">\(x_1^t\)</span> from <span class="math">\(P(x_1|x_2^{t-1},...,x_n^{t-1})\)</span></li>
-<li>sample <span class="math">\(x_2^t\)</span> from <span class="math">\(P(x_2|x_1^{t-1},x_3^{t-1},...,x_n^{t-1})\)</span></li>
-<li>continue until you sample <span class="math">\(x_n^t\)</span> from <span class="math">\(P(x_1|x_1^{t-1},...,x_{n-1}^{t-1})\)</span></li>
-</ol>
-</li>
-</ol>
-<p>So each cycle <span class="math">\(t\)</span> produces a new sample of <span class="math">\((x_1,...,x_n)\)</span>.  Eventually the Markov chain will converge and the samples will be very similar to those from the target distribution <span class="math">\(P(\textbf{x})\)</span>.</p>
-<h3>Collapsed Gibbs Sampling for LDA</h3>
-<p>Now let's return to LDA.  Before the collapsed Gibbs sampling procedure can be described, we must realize an important result.  Take an arbitrary parameter vector <span class="math">\(\theta_{i}\)</span> (i.e. the distribution over topics in document <span class="math">\(i\)</span>).  From the graphical model, we know that the topic assignments <span class="math">\(z_i\)</span> follow a multinomial distribution with a Dirichlet prior on <span class="math">\(\theta_i\)</span> .  These two distributions are conjugate pairs which means that that the posterior distribution of <span class="math">\(\theta_i\)</span> also follow a Dirichlet distribution <span class="math">\(Dir(\theta_i|n_i+\alpha)\)</span> (this is a standard result but you can find a <a href="http://en.wikipedia.org/wiki/Dirichlet_distribution#Conjugate_to_categorical.2Fmultinomial">short proof here</a>) where <span class="math">\(n_i\)</span> is the vector of word counts for document <span class="math">\(i\)</span>.  So, to get an estimate of <span class="math">\(\theta_i\)</span> we can take the expected value of this posterior distribution over <span class="math">\(\theta_i\)</span>.  By the definition of the expected value of a Dirichlet distribution, the estimate for <span class="math">\(\theta_{i,k}\)</span> (the proportion of topic <span class="math">\(k\)</span> in document <span class="math">\(i\)</span>) is 
-<div class="math">$$\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}$$</div>
-</p>
-<p>where <span class="math">\(n_i^k\)</span> is the number of words in document <span class="math">\(i\)</span> that have been assigned to topic <span class="math">\(k\)</span>.  And by the exact same argument, the estimate for <span class="math">\(\phi_{k,w}\)</span> (the proportion of word <span class="math">\(w\)</span> in topic <span class="math">\(k\)</span>) is </p>
-<p>
-<div class="math">$$\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}$$</div>
-</p>
-<p>where <span class="math">\(n_w^k\)</span> is the number of times word <span class="math">\(w\)</span> is assigned to topic <span class="math">\(k\)</span> (over all documents in the corpus).  So what is the significance of this?  The point is that both of these estimates <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> only depend on the topic assignments <span class="math">\(Z\)</span>.  Therefore, we are able to only focus on inferring the latent variable <span class="math">\(Z\)</span> and the other latent variables can be computed directly from <span class="math">\(Z\)</span>. This makes things much easier.</p>
-<p>We can infer the topic assignments <span class="math">\(Z\)</span> from the observed data using collapsed Gibbs sampling.  From the previous section on Gibbs sampling, we need to come up with a conditional distribution that is easy to sample from whose joint distribution is the posterior distribution that we are interested in.  The posterior distribution that we are interested in is <span class="math">\(P(Z|W)\)</span> which is the probability of all of the topic assignments given all of the observed words in all of the documents.  So the conditional that we need to sample from is <span class="math">\(P(z_i=j|z_{-i},w)\)</span>.  But we need to know the form of this distribution to make sure that we can easily sample from it.  So let's derive it. </p>
-<p>From Bayes' rule, </p>
-<p><span class="math">\(P(z_i=j|z_{-i},w) \propto P(w_i|z_i=j,z_{-i},w_{-i})P(z_i=j|z_{-i})\)</span></p>
-<p>Now let's focus on the left-most term.  We can marginalize over <span class="math">\(\phi\)</span> to get </p>
-<p><span class="math">\(P(w_i|z_i=j,z_{-i},w_{-i})=\int P(w_i | z_i=j,\phi_j)P(\phi_j |z_{-i},w_{-i})d\phi_j\)</span> </p>
-<p>Let's first look at the first term inside the integral.  Since we are conditioning on the <span class="math">\(\phi_j\)</span> parameters, <span class="math">\(P(w_i | z_i=j,\phi_j)=\phi_{w_i,j}\)</span>.  The second term inside the integral <span class="math">\(P(\phi_j |z_{-i},w_{-i})\)</span> is the posterior distribution of a multinomial likelihood combined with a Dirichlet prior (again!) which has a nice closed form solution that we have seen before.  After solving this integral (exact steps ommitted, but not difficult) we get </p>
-<p><span class="math">\(P(w_i|z_i=j,z_{-i},w_{-i})=\frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\)</span> </p>
-<p>Where <span class="math">\(n_{-i,j}^{w_i}\)</span> is the total number of <span class="math">\(w_i\)</span> instances assigned to topic <span class="math">\(j\)</span> not including the current <span class="math">\(w_i\)</span> and <span class="math">\(n_{-i,j}\)</span> is the total number of words assigned to topic <span class="math">\(j\)</span> not including the current word. As for the second term in the first equation <span class="math">\(P(z_i=j|z_{-i})\)</span> , we can follow the same general procedure.  First we marginalize over <span class="math">\(\theta_i\)</span> to get </p>
-<p><span class="math">\(P(z_i=j|z_{-i})=\int P(z_i=j|\theta_i)P(\theta_{d_i}|z_{-i})d\theta_{d_i}\)</span> </p>
-<p>And just as before, <span class="math">\(P(z_i=j|\theta_{d_i})=\theta_{d_{i},j}\)</span> and <span class="math">\(P(\theta_i|z_{-i})\)</span> is the posterior of a mutlinomial-Dirichlet conjugate pair.  The integral turns out to be </p>
-<p><span class="math">\(P(z_i=j|z_{-i})=\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}\)</span> </p>
-<p>where <span class="math">\(n_{-i,j}^{d_i}\)</span> is the number of words assigned to topic <span class="math">\(j\)</span> in document <span class="math">\(d_i\)</span> not counting the current one and <span class="math">\(n_{-i}^{d_i}\)</span> is the total number of words in document <span class="math">\(d_i\)</span>. Now let's put everything together to get our final conditional distribution for the Gibbs sampler. </p>
-<p>
-<div class="math">$$P(z_i=j|z_{-i},w) \propto \frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}$$</div>
-</p>
-<p>Then we carry out the Gibbs sampling procedure as usual to get samples from the posterior</p>
-<h2>Putting it all Together</h2>
-<p>Hopefully, at this point, all aspects of Latent Dirichlet Allocation are somewhat clear.  In terms of implementation, everything hinges on the Gibbs sampling inference step.  The topic assignments are initialized randomly.  Then the Gibbs procedure is run while keeping track of the required document and topic counts.  Once the sampling has converged, the document/topic distributions <span class="math">\(\theta\)</span> and topic/word distributions <span class="math">\(\phi\)</span> can be trivially computed from the learned topic assignments.  The following pseudocode outlines this process in greater detail. </p>
-<p><img alt="alt text" src="images/lda_algorithm.png" title="lda algorithm" /> </p>
-<p>And, as stated previously, these topic assignments can be used to compute the counts necessary to determine the other hidden variables <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span>. See <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Part II of this blog post</a> which explains how to translate this theory into Scala code.</p>
-<h3>Resources</h3>
-<ul>
-<li>The original Paper on LDA that uses variational inference instead of Gibbs sampling.  <a href="http://machinelearning.wustl.edu/mlpapers/paper_files/BleiNJ03.pdf">Latent Dirichlet Allocation - Blei, Ng, Jordan</a></li>
-<li>The original paper on collapsed Gibbs sampling for LDA.  <a href="http://psiexp.ss.uci.edu/research/papers/SteyversGriffithsLSABookFormatted.pdf">Probabilistic Topic Models - Griffiths, Steyvers</a></li>
-<li>Another nice technical report that shows much more detail than what I have shown.  <a href="http://http://www.arbylon.net/publications/text-est.pdf">Parameter Estimation for Text Analysis - Heinrich</a></li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-7.html">Facebook Recruiting III Keyword Extraction - Part 7</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2013-11-24T00:00:00+01:00">
-          on&nbsp;Sun 24 November 2013
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><h2>Parameter Tuning</h2>
-<p>Now the time has come to perform an actual out-of-sample test of our association rule algorithm.  The training data set has about 6 million rows so the association rule algorithm will be trained on 5 million rows and the remaining 1 million rows will be held out for testing.  From this we can accomplish two goals</p>
-<p>It gives us an idea of how well our algorithm will perform on the actual test set without actually having to submit anything on the Kaggle website (you are only allowed 2 submissions per day).
-It allows us to tune the parameters of our algorithm to achieve the best performance on our hold-out data set.
-However, before we start tuning parameters we should first formalize our classification algorithm.</p>
-<h3>Classification Algorithm</h3>
-<p>The classification algorithm is fairly simple.  The following pseudo-code illustrates how it works</p>
-<div class="highlight"><pre>I={}
-For r in AR:
-     if C(r)&gt;α AND supp(r)&gt;β AND r not in I:
-          I.append(r)
-</pre></div>
-
-
-<p>The input to the algorithm is the learned association rules from both the post title and post body <span class="math">\(AR\)</span>.  <span class="math">\(I\)</span> denotes the set of tags that will be predicted for the given post, so initially <span class="math">\(I\)</span> is empty.  The algorithm searches through <span class="math">\(AR\)</span> to find association rules <span class="math">\(r\)</span> with confidence above a certain threshold <span class="math">\(\alpha\)</span> and support above a certain threshold <span class="math">\(\beta\)</span>.  The tags in these association rules are then added to the set <span class="math">\(I\)</span> which become the predicted tags for this post.</p>
-<p>So we need to find the optimal parameters <span class="math">\(\alpha\)</span> and <span class="math">\(\beta\)</span>.  One way to do this is to vary these parameters and see how their values affect the test error.  The parameter values that produce the best test performance are the ones we would use.  Before we can do this, we must decide on a loss function.  Kaggle says that the loss function that submissions are scored upon is the mean F1-score loss function.  The mean F1-score loss function is defined as</p>
-<p><span class="math">\(F1=2\frac{p \cdot r}{p+r}\)</span> where <span class="math">\(p=\frac{tp}{tp+fp}\)</span> and <span class="math">\(r=\frac{tp}{tp+fn}\)</span></p>
-<p>This loss function means that both precision (<span class="math">\(p\)</span>) and recall (<span class="math">\(r\)</span>) are weighted equally so both must be optimized in order to obtain the best score. The F1-score can be written in Python code as the following</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">F1_score</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span><span class="n">predicted</span><span class="p">):</span>
-    <span class="n">tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
-    <span class="n">predicted</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span>
-    <span class="n">tp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span> <span class="o">&amp;</span> <span class="n">predicted</span><span class="p">)</span>
-    <span class="n">fp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
-    <span class="n">fn</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
-
-    <span class="k">if</span> <span class="n">tp</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
-        <span class="n">precision</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fp</span><span class="p">)</span>
-        <span class="n">recall</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fn</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="mi">2</span><span class="o">*</span><span class="p">((</span><span class="n">precision</span><span class="o">*</span><span class="n">recall</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">precision</span><span class="o">+</span><span class="n">recall</span><span class="p">))</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mi">0</span>
-</pre></div>
-
-
-<p>predicted is the list of tags that the classification algorithm predicts for a given post in the hold-out set and tags is the list of actual tags for that post.  These lists are then converted to Python sets so that tp, fp, and fn can be computed efficiently.</p>
-<h3>Varying the Parameters</h3>
-<p>Now that we have a cost function, we can run some tests to calibrate our parameters α and β.  As stated earlier, we split the data set into a training set and test set - mine association rules from the training set and test their performance on the test set.</p>
-<h3>Why not use cross-validation?</h3>
-<p>Usually one should use k-fold cross-validation to learn the optimal parameter values as it would give the most unbiased representation of the algorithm's performance on unseen data.  However, 5-fold cross-validation was tried initially but it became clear that validation errors for each of the 5 validation sets were very similar so taking the average would not be much different than the error of one of the validation sets.  For this reason (and the fact that each test will take 1/5th of the time), a single test set was used instead.</p>
-<h2>Results</h2>
-<p>After considering many combinations of support and confidence values, the best F1-score was found to be <strong>0.74021</strong> with confidence=0.5 and support=5.  The number 1 score was 0.81350 so I was not too far off.</p>
-<p>There were many different strategies that I wanted to try but did not have time to implement.  Here is a list of improvements/alternative strategies that I would have liked to try if I had enough time.</p>
-<ul>
-<li>About 50,000 posts in the test set were predicted to have zero tags because there were no association rules for them that fell within the acceptable threshold.  These posts were scored as zero.  However, F1-score can never be negative so any random guess of tags could only improve the score.  A naive solution would be to simply use the baseline tags (i.e. javascript c# python php java) as predictions for these posts, however I suspect that there would be a more clever way of doing this.</li>
-<li>The opposite problem also occurs in some predictions.  Some posts are predicted to have 8, 9, 10+ tags.  Given what we know from the training set and this kaggle thread, the maximum number of tags is 5 (and it is also quite rare to have that many).  This does not necessarily mean that we should cut off all predictions at 5 tags, but certainly 10+ tags is not a sensible number of tags to predict.  So I think that is very likely that our score would increase if we reduced the number of tags in these cases.</li>
-<li>I considered each post as a bag-of-words - meaning that I only cared which words appeared in the post, not their ordering.  However, I suspect that if I was able to build bigram-based association rules, I could increase the classifier performance.  For example, if a post title contains the bigram "linux server", my current classifier would look at the association rules for "linux" and "server" independently and it might be unlikely that it would predict the tag "linux-server" for either of those terms.  However, I suspect that a bigram association rule between "linux server" and "linux-server" would be much more likely.  The trade-off is that it would be much more difficult to mine bigram association rules on a single computer in terms of memory capacity.</li>
-<li>Another strategy would be to abandon the association rule classification strategy altogether and consider a more classical method.  One such method would be to create a very sparse binary valued matrix from the training set where each feature is a word that could appear in a post (assign it a value of 1 if it does, 0 if is doesn't).  Then use well-known classification methods to model the relationship between the input matrix and the output tags.  However, I would imagine that this could present problems due to the size and sparsity of this matrix.</li>
-</ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');
     mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
