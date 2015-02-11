@@ -713,35 +713,6 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
-                        <h1 class="entry-title"><a href="/how-to-multiply-a-transposed-distributed-rowmatrix-in-spark.html">How to Multiply a Transposed Distributed RowMatrix in Spark</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-01-05T00:00:00+01:00">
-          on&nbsp;Mon 05 January 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
-</div><!-- /.post-info --><p>I was recently building a spark implementation of a topic modelling algorithm which involved a matrix where the rows represented the number of topics and the columns represented the words in the vocabulary.  Initially I was storing this matrix locally using a <a href="http://www.scalanlp.org/api/breeze/index.html#breeze.linalg.DenseMatrix">Breeze DenseMatrix</a>.  However, when my vocabulary size grew to around 100,000 with a few hundred topics I eventually encountered an out-of-memory error.  I had to start using a distributed matrix.  Spark's <a href="http://spark.apache.org/docs/latest/mllib-guide.html">MLlib</a> has three kinds of distributed matrices.</p>
-<ul>
-<li><a href="https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.RowMatrix">RowMatrix</a> - A matrix distributed by row.</li>
-<li><a href="https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix">IndexedRowMatrix</a> - A matrix distributed by an indexed row.</li>
-<li><a href="https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.CoordinateMatrix">CoordinateMatrix</a> - A matrix distributed by entry.</li>
-</ul>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
                         <h1 class="entry-title"><a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution</a></h1>
 <div class="post-info">
 	<ul>
