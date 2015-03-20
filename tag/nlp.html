@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
                 <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
                 <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
                 <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
@@ -62,6 +63,327 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-03-20T00:00:00+01:00">
+          on&nbsp;Fri 20 March 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>In the past, I have studied the online LDA algorithm from <a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;ved=0CDUQFjAA&amp;url=https%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiBach2010b.pdf&amp;ei=pib7VP_ZIsewggS3pYAY&amp;usg=AFQjCNHLmU8Gk_P4usBj2QcGcaolw87w4w&amp;sig2=TVmpNtdTBqqPScHDqBGYcg&amp;bvm=bv.87611401,d.eXY">Hoffman et al.</a> in some depth resulting in <a href="http://alexminnaar.com/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">this blog post</a> and corresponding <a href="https://github.com/alexminnaar/ScalaTopicModels">Scala code</a>.  Before we go further I will provide a general description of how the algorithm works.  In online LDA, minibatches of documents are sequentially processed to update a global topic/word matrix which defines the topics that have been learned.  The processing consists of two steps:</p>
+<ul>
+<li><strong>The E-Step:</strong>  Given the minibatch of documents, updates to the corresponding rows of the topic/word matrix are computed.</li>
+<li><strong>The M-Step:</strong>  The updates from the E-Step are blended with the current topic/word matrix resulting in the updated topic/word matrix.</li>
+</ul>
+<p>This post details how I developed a distributed version of online LDA using the Apache Spark engine.  At first glance, it might seem redundant to build a distributed version of online LDA since one of the main advantages of the algorithm is its scalability (documents are streamed sequentially so they do not need to be kept in main memory).  While it is true that the original algorithm is scalable in terms of memory, using a distributed computing framework (such as Spark) can speed the algorithm up immensely.  Today, companies are demanding real-time or near real-time data processing which makes a Spark solution advantageous.  Furthermore, there are some cases - for example if you choose to learn a sufficiently large number of topics with a sufficiently large vocabulary size - where the original algorithm can in fact run into memory issues.  Hopefully I have shown that a distributed version of online LDA would be beneficial.</p>
+<p>This blog post will be divided into a few sections.  First I will give a very broad overview of how Spark works.  Then I will outline how some processes of the original online LDA algorithm can be parallelized (again, for a more detailed outline of how the original online LDA algorithm works I encourage you to read <a href="http://alexminnaar.com/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">my prevous blog post</a>).  Finally I will provide the code for the Spark implemenation as well as a demo.</p>
+<h1>The Basics of Spark</h1>
+<p>The beauty of Spark is in its simplicity.  It has abstracted away all of the complicated aspects of MapReduce programming and it leaves us with a simple interface with which to build our distributed processing jobs.  Here I will provide you with a very brief and incomplete overview of how Spark works (refer to the <a href="https://spark.apache.org/docs/latest/">Spark documentation</a> for more details). </p>
+<p>In Spark, all distributed computations are done on RDDs (Resilient Distributed Datasets).  RDDs are linear data structures that are distributed across the nodes in your cluster.  The most common operation that you can perform on an RDD is a <code>map</code>.  The <code>map</code> function takes a function as an input an applies this function to each element of the RDD in parallel and returns another RDD containing the result.  Another common operation that is performed on RDDs is the <code>reduce</code> function.  <code>reduce</code> also takes a function as an input (that must be commutative and associative) and aggregates the elements of the RDD in based on that function.  There are many other very useful RDD operations (eg. <em>reduceByKey</em>, <em>join</em>, <em>zip</em> etc.) that are beyond the scope of this blog post.  To learn more read the <a href="https://spark.apache.org/docs/latest/programming-guide.html">Spark programming guide</a>.</p>
+<p>It is also important to note that, aside from the user-friendly interface, Spark's main advantage is its speed.  Unlike previous MapReduce frameworks, Spark utilizes the RAM of the machines in the clusters.  When data is kept in memory, disk serialization/deserialzation is greatly reduced.  This, in turn, allows us to distribute iterative algorithms much faster (we no longer have to wait for the data to write to disk after each iteration).  Online LDA is a distributed algorithm which makes it a great fit for Spark.</p>
+<h1>Parallelizing the Online LDA Algorithm</h1>
+<p>Now let's use Spark to parallelize the online LDA algorith.  There are four aspects of the algorithm that could benefit from parallelzation - the global topic/word matrix, the minibatch, the E-Step, and the M-Step.  Let's start with the topic/word matrix.</p>
+<h2>A Distributed Topic/Word Matrix</h2>
+<p>The global topic/word matrix is the data structure that contains all of the topics that have been learned so far.  The rows of this matrix correspond to the words in the vocabulary and the columns correspond to the topics.  At first, it might seem like this data structure is small enough to exist locally in the driver.  After all, there are only so many words in the English language which bounds the number of rows and the number of topics should be less than the number of words in the vocabulary.  However, I have experienced out-of-memory errors when this matrix is too large.  This is likely not because the matrix itself is too large to fit in the driver, but because size of this matrix combined with everything else that is associated with the Spark application is too large.  In addition, distributing the topic/word matrix allows for more parallelism in other parts of the online LDA algorithm which results in an overall speedup.  Spark's MLlib library provides a distributed matrix data structure called <a href="https://spark.apache.org/docs/1.0.0/api/scala/index.html#org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix">indexedRowMatrix</a> which is an RDD of tuples containing the rows of the matrix and their corresponding indexes.  We will use this data structure to store our topic/word matrix.</p>
+<h2>A Distributed Minibatch</h2>
+<p>The minibatch is a collection of documents with which we update the LDA model.  In the original algorithm, the documents in the minibatch must be converted to <em>bag-of-words</em> format (i.e. a set of (wordId, frequency) tuples).  If the minibatch is made into an RDD (where each element of the RDD consists of a document in the minibatch), the <em>bag-of-words</em> conversion can be performed in parallel via a <em>map</em> and a <em>toBagOfWords</em> function as shown below.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">bagOfWordsRDD</span><span class="k">:</span><span class="kt">RDD</span><span class="o">[</span><span class="kt">List</span><span class="o">[(</span><span class="kt">Int</span>,<span class="kt">Int</span><span class="o">)]]</span> <span class="k">=</span> <span class="n">minibatchRDD</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">toBagOfWords</span><span class="o">(</span><span class="n">x</span><span class="o">))</span>
+</pre></div>
+
+
+<p>Clearly, this is more efficient that converting each document to its <em>bag-of-words</em> format sequentially.  Furthermore, well shall see later that the minibatch must be an RDD in order to parallelize future computations that involve the minibatch.</p>
+<h2>A Distributed E-Step</h2>
+<p>The following is the original non-distributed implementation of the E-step for online LDA.  It is not important to understand exactly what the code is doing - the important part is observing the presence of the inner and outer loops (indicated in the comments).</p>
+<div class="highlight"><pre> <span class="k">def</span> <span class="n">eStep</span><span class="o">(</span><span class="n">miniBatch</span><span class="k">:</span> <span class="kt">List</span><span class="o">[</span><span class="kt">List</span><span class="o">[(</span><span class="kt">Int</span>, <span class="kt">Int</span><span class="o">)]],</span> <span class="n">expELogBeta</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="o">(</span><span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">gamma</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">miniBatch</span><span class="o">.</span><span class="n">length</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">,</span> <span class="nc">Gamma</span><span class="o">(</span><span class="mf">100.0</span><span class="o">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="mf">100.0</span><span class="o">).</span><span class="n">sample</span><span class="o">(</span><span class="n">numTopics</span> <span class="o">*</span> <span class="n">miniBatch</span><span class="o">.</span><span class="n">length</span><span class="o">).</span><span class="n">toArray</span><span class="o">)</span>
+
+    <span class="k">val</span> <span class="n">eLogTheta</span> <span class="k">=</span> <span class="n">dirichletExpectation</span><span class="o">(</span><span class="n">gamma</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">expELogTheta</span> <span class="k">=</span> <span class="n">exp</span><span class="o">(</span><span class="n">eLogTheta</span><span class="o">)</span>
+    <span class="k">var</span> <span class="n">sstats</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numTopics</span><span class="o">,</span> <span class="n">numTerms</span><span class="o">)</span>
+
+    <span class="k">for</span> <span class="o">((</span><span class="n">doc</span><span class="o">,</span> <span class="n">idx</span><span class="o">)</span> <span class="k">&lt;-</span> <span class="n">miniBatch</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">)</span> <span class="o">{</span>  <span class="c1">// &lt;---------- Outer Loop</span>
+
+      <span class="k">val</span> <span class="n">idCtList</span> <span class="k">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">toList</span><span class="o">.</span><span class="n">sortBy</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">_1</span><span class="o">)</span>
+      <span class="k">val</span> <span class="n">wordIDs</span> <span class="k">=</span> <span class="n">idCtList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">_1</span><span class="o">)</span>
+      <span class="k">val</span> <span class="n">cts</span> <span class="k">=</span> <span class="n">idCtList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">_2</span><span class="o">.</span><span class="n">toDouble</span><span class="o">)</span>
+
+      <span class="k">val</span> <span class="n">gammaD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">gamma</span><span class="o">(</span><span class="n">idx</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toDenseMatrix</span>
+      <span class="k">val</span> <span class="n">expELogThetaD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">expELogTheta</span><span class="o">(</span><span class="n">idx</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toDenseMatrix</span>
+      <span class="k">val</span> <span class="n">expELogBetaD</span> <span class="k">=</span> <span class="n">expELogBeta</span><span class="o">(</span><span class="mi">0</span> <span class="n">until</span> <span class="n">expELogBeta</span><span class="o">.</span><span class="n">rows</span><span class="o">,</span> <span class="n">wordIDs</span><span class="o">.</span><span class="n">toIndexedSeq</span><span class="o">).</span><span class="n">toDenseMatrix</span>
+      <span class="k">val</span> <span class="n">phiNorm</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">expELogThetaD</span> <span class="o">*</span> <span class="n">expELogBetaD</span> <span class="o">+</span> <span class="mi">1</span><span class="n">e</span><span class="o">-</span><span class="mi">100</span>
+      <span class="k">val</span> <span class="n">docCounts</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">(</span><span class="n">cts</span><span class="o">.</span><span class="n">toArray</span><span class="o">)</span>
+
+      <span class="c1">//Recursive loop to infer phiNorm, gammaD and exoElogThetaD parameters</span>
+      <span class="k">def</span> <span class="n">gammaUpdate</span><span class="o">(</span><span class="n">pn</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">expETD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+        <span class="k">val</span> <span class="n">term1</span> <span class="k">=</span> <span class="n">expETD</span> <span class="o">:*</span> <span class="o">(</span><span class="n">docCounts</span> <span class="o">/</span> <span class="n">pn</span><span class="o">)</span> <span class="o">*</span> <span class="n">expELogBetaD</span><span class="o">.</span><span class="n">t</span>
+        <span class="n">term1</span><span class="o">(::,</span> <span class="o">*)</span> <span class="o">+</span> <span class="n">alpha</span>
+      <span class="o">}</span>
+
+      <span class="k">def</span> <span class="n">thetaUpdate</span><span class="o">(</span><span class="n">gD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+        <span class="n">exp</span><span class="o">(</span><span class="n">dirichletExpectation</span><span class="o">(</span><span class="n">gD</span><span class="o">))</span>
+      <span class="o">}</span>
+
+      <span class="k">def</span> <span class="n">phiUpdate</span><span class="o">(</span><span class="n">expETD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+        <span class="n">expETD</span> <span class="o">*</span> <span class="n">expELogBetaD</span> <span class="o">+</span> <span class="mi">1</span><span class="n">e</span><span class="o">-</span><span class="mi">100</span>
+      <span class="o">}</span>
+
+      <span class="k">def</span> <span class="n">eStepIterator</span><span class="o">(</span><span class="n">phiNorm</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">expELogThetaD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">gammaD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="o">(</span><span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">lastGamma</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">gammaD</span><span class="o">.</span><span class="n">rows</span><span class="o">,</span> <span class="n">gammaD</span><span class="o">.</span><span class="n">cols</span><span class="o">)</span>
+
+        <span class="k">def</span> <span class="n">loop</span><span class="o">(</span><span class="n">counter</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">newGamma</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">newTheta</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">newPhi</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">lastGamma</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="o">(</span><span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span>
+          <span class="k">if</span> <span class="o">(((</span><span class="n">mean</span><span class="o">(</span><span class="n">abs</span><span class="o">(</span><span class="n">newGamma</span> <span class="o">-</span> <span class="n">lastGamma</span><span class="o">)))</span> <span class="o">&lt;</span> <span class="n">gammaThreshold</span><span class="o">)</span> <span class="o">||</span> <span class="o">(</span><span class="n">counter</span> <span class="o">&gt;</span> <span class="n">iterations</span><span class="o">))</span> <span class="o">{</span>
+            <span class="o">(</span><span class="n">newGamma</span><span class="o">,</span> <span class="n">newPhi</span><span class="o">,</span> <span class="n">newTheta</span><span class="o">)</span>
+          <span class="o">}</span>
+          <span class="k">else</span> <span class="o">{</span>
+            <span class="k">val</span> <span class="n">term1</span> <span class="k">=</span> <span class="n">gammaUpdate</span><span class="o">(</span><span class="n">newPhi</span><span class="o">,</span> <span class="n">newTheta</span><span class="o">)</span>
+            <span class="k">val</span> <span class="n">term2</span> <span class="k">=</span> <span class="n">thetaUpdate</span><span class="o">(</span><span class="n">term1</span><span class="o">)</span>
+            <span class="k">val</span> <span class="n">term3</span> <span class="k">=</span> <span class="n">phiUpdate</span><span class="o">(</span><span class="n">term2</span><span class="o">)</span>
+            <span class="n">loop</span><span class="o">(</span><span class="n">counter</span> <span class="o">+</span> <span class="mi">1</span><span class="o">,</span> <span class="n">term1</span><span class="o">,</span> <span class="n">term2</span><span class="o">,</span> <span class="n">term3</span><span class="o">,</span> <span class="n">newGamma</span><span class="o">)</span>
+          <span class="o">}</span>
+        <span class="o">}</span>
+        <span class="n">loop</span><span class="o">(</span><span class="mi">0</span><span class="o">,</span> <span class="n">gammaD</span><span class="o">,</span> <span class="n">expELogThetaD</span><span class="o">,</span> <span class="n">phiNorm</span><span class="o">,</span> <span class="n">lastGamma</span><span class="o">)</span>
+      <span class="o">}</span>
+
+      <span class="c1">//execute recursive loop function</span>
+      <span class="k">val</span> <span class="o">(</span><span class="n">newGammaD</span><span class="o">,</span> <span class="n">newPhiNorm</span><span class="o">,</span> <span class="n">newExpELogThetaD</span><span class="o">)</span> <span class="k">=</span> <span class="n">eStepIterator</span><span class="o">(</span><span class="n">phiNorm</span><span class="o">,</span> <span class="n">expELogThetaD</span><span class="o">,</span> <span class="n">gammaD</span><span class="o">)</span>  <span class="c1">// &lt;---------- Inner Loop</span>
+      <span class="n">gamma</span><span class="o">(</span><span class="n">idx</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">newGammaD</span><span class="o">.</span><span class="n">toDenseVector</span><span class="o">.</span><span class="n">t</span>
+      <span class="k">val</span> <span class="n">sstatTerm</span> <span class="k">=</span> <span class="n">newExpELogThetaD</span><span class="o">.</span><span class="n">t</span> <span class="o">*</span> <span class="o">(</span><span class="n">docCounts</span> <span class="o">/</span> <span class="n">newPhiNorm</span><span class="o">)</span>
+
+      <span class="k">for</span> <span class="o">((</span><span class="n">i</span><span class="o">,</span> <span class="n">ct</span><span class="o">)</span> <span class="k">&lt;-</span> <span class="n">wordIDs</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">sstats</span><span class="o">(::,</span> <span class="n">i</span><span class="o">)</span> <span class="o">:+=</span> <span class="n">sstatTerm</span><span class="o">(::,</span> <span class="n">ct</span><span class="o">)</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="n">sstats</span> <span class="k">=</span> <span class="n">sstats</span> <span class="o">:*</span> <span class="n">expELogBeta</span>
+    <span class="o">(</span><span class="n">gamma</span><span class="o">,</span> <span class="n">sstats</span><span class="o">)</span>
+  <span class="o">}</span>
+</pre></div>
+
+
+<p>As you can see, there is an outer loop over all documents in the minibatch, and an inner (recursive) loop for each document.  In the distributed implementation, the inner loop is performed in parallel for every document in the minibatch RDD (using a <code>map</code> function) and then the results are combined (using a <code>reduce</code> function).  </p>
+<p>So let's first focus on the <code>map</code> function.  This map function is applied to every document in the minibatch RDD in parallel so the function should take only one document as an input and be essentially the same as the inner loop of the above non-distributed version.  Unfortunately, this produces a big problem because this code also requires the global topic/word matrix (the <code>expELogBeta</code> variable) which is now an RDD.  <strong>Spark does not allow nested RDD computations!</strong>  That is, one cannot apply a map function to an RDD that involves another RDD (this will create a serialization error).  We have to be a bit more creative!</p>
+<p>This problem can be solved by first observing that the E-Step does not necessarily require all of the rows of the topic/word matrix, only those corresponding to the words that are in the minibatch.   Therefore, let's have our <code>map</code> function take a list of 3-tuples that consist of the wordId, the word count, and the row of the topic/word matrix corresponding to the wordId. This way, we can compute the E-Step without working with the distributed topic/word matrix directly.  The code below shows this implementation.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="n">eStep</span><span class="o">(</span><span class="n">expELogBeta</span><span class="k">:</span> <span class="kt">Array</span><span class="o">[(</span><span class="kt">V</span>, <span class="kt">Int</span>, <span class="kt">Int</span><span class="o">)],</span> <span class="n">numTopics</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">alpha</span><span class="k">:</span> <span class="kt">Double</span><span class="o">,</span> <span class="n">gammaThreshold</span><span class="k">:</span> <span class="kt">Double</span><span class="o">,</span> <span class="n">iterations</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="o">(</span><span class="kt">Array</span><span class="o">[(</span><span class="kt">Int</span>, <span class="kt">Array</span><span class="o">[</span><span class="kt">Double</span><span class="o">])],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">var</span> <span class="n">gammaD</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numTopics</span><span class="o">,</span> <span class="mi">1</span><span class="o">,</span> <span class="nc">Gamma</span><span class="o">(</span><span class="mf">100.0</span><span class="o">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="mf">100.0</span><span class="o">).</span><span class="n">sample</span><span class="o">(</span><span class="n">numTopics</span><span class="o">).</span><span class="n">toArray</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">eLogThetaD</span> <span class="k">=</span> <span class="n">dirichletExpectation</span><span class="o">(</span><span class="n">gammaD</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">expELogThetaD</span> <span class="k">=</span> <span class="n">exp</span><span class="o">(</span><span class="n">eLogThetaD</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">cts</span> <span class="k">=</span> <span class="n">expELogBeta</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">_3</span><span class="o">.</span><span class="n">toDouble</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">wordIDs</span> <span class="k">=</span> <span class="n">expELogBeta</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">_2</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">expELogBetaD</span> <span class="k">=</span> <span class="n">expELogBeta</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">_1</span><span class="o">.</span><span class="n">toArray</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">expELogBetaDDM</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">DenseMatrix</span><span class="o">(</span><span class="n">expELogBetaD</span><span class="o">.</span><span class="n">size</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">,</span> <span class="n">expELogBetaD</span><span class="o">.</span><span class="n">flatten</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">,</span> <span class="kc">true</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">phiNorm</span> <span class="k">=</span> <span class="n">expELogBetaDDM</span> <span class="o">*</span> <span class="n">expELogThetaD</span> <span class="o">+</span> <span class="mi">1</span><span class="n">e</span><span class="o">-</span><span class="mi">100</span>
+    <span class="k">val</span> <span class="n">docCounts</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">(</span><span class="n">cts</span><span class="o">)</span>
+
+    <span class="k">def</span> <span class="n">gammaUpdate</span><span class="o">(</span><span class="n">pn</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">expETD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+      <span class="k">val</span> <span class="n">term1</span> <span class="k">=</span> <span class="n">expETD</span> <span class="o">:*</span> <span class="o">(</span><span class="n">docCounts</span> <span class="o">/</span> <span class="n">pn</span><span class="o">.</span><span class="n">t</span><span class="o">)</span> <span class="o">*</span> <span class="n">expELogBetaDDM</span>
+      <span class="n">term1</span><span class="o">(::,</span> <span class="o">*)</span> <span class="o">+</span> <span class="n">alpha</span>
+    <span class="o">}</span>
+
+    <span class="k">def</span> <span class="n">thetaUpdate</span><span class="o">(</span><span class="n">gD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+      <span class="n">exp</span><span class="o">(</span><span class="n">dirichletExpectation</span><span class="o">(</span><span class="n">gD</span><span class="o">))</span>
+    <span class="o">}</span>
+
+    <span class="k">def</span> <span class="n">phiUpdate</span><span class="o">(</span><span class="n">expETD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+      <span class="n">expELogBetaDDM</span> <span class="o">*</span> <span class="n">expETD</span> <span class="o">+</span> <span class="mi">1</span><span class="n">e</span><span class="o">-</span><span class="mi">100</span>
+    <span class="o">}</span>
+
+    <span class="k">def</span> <span class="n">eStepIterator</span><span class="o">(</span><span class="n">phiNorm</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">expELogThetaD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+                      <span class="n">gammaD</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="o">(</span><span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">lastGamma</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">gammaD</span><span class="o">.</span><span class="n">rows</span><span class="o">,</span> <span class="n">gammaD</span><span class="o">.</span><span class="n">cols</span><span class="o">)</span>
+
+      <span class="k">def</span> <span class="n">loop</span><span class="o">(</span><span class="n">counter</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">newGamma</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">newTheta</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">newPhi</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+               <span class="n">lastGamma</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span><span class="k">:</span> <span class="o">(</span><span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="nc">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(((</span><span class="n">mean</span><span class="o">(</span><span class="n">abs</span><span class="o">(</span><span class="n">newGamma</span> <span class="o">-</span> <span class="n">lastGamma</span><span class="o">)))</span> <span class="o">&lt;</span> <span class="n">gammaThreshold</span><span class="o">)</span> <span class="o">||</span> <span class="o">(</span><span class="n">counter</span> <span class="o">&gt;</span> <span class="n">iterations</span> <span class="o">-</span> <span class="mi">1</span><span class="o">))</span> <span class="o">{</span>
+          <span class="o">(</span><span class="n">newGamma</span><span class="o">,</span> <span class="n">newPhi</span><span class="o">,</span> <span class="n">newTheta</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">term1</span> <span class="k">=</span> <span class="n">gammaUpdate</span><span class="o">(</span><span class="n">newPhi</span><span class="o">,</span> <span class="n">newTheta</span><span class="o">)</span>
+          <span class="k">val</span> <span class="n">term2</span> <span class="k">=</span> <span class="n">thetaUpdate</span><span class="o">(</span><span class="n">term1</span><span class="o">)</span>
+          <span class="k">val</span> <span class="n">term3</span> <span class="k">=</span> <span class="n">phiUpdate</span><span class="o">(</span><span class="n">term2</span><span class="o">)</span>
+          <span class="n">loop</span><span class="o">(</span><span class="n">counter</span> <span class="o">+</span> <span class="mi">1</span><span class="o">,</span> <span class="n">term1</span><span class="o">,</span> <span class="n">term2</span><span class="o">,</span> <span class="n">term3</span><span class="o">,</span> <span class="n">newGamma</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="n">loop</span><span class="o">(</span><span class="mi">0</span><span class="o">,</span> <span class="n">gammaD</span><span class="o">,</span> <span class="n">expELogThetaD</span><span class="o">,</span> <span class="n">phiNorm</span><span class="o">,</span> <span class="n">lastGamma</span><span class="o">)</span>
+    <span class="o">}</span>
+
+    <span class="c1">//execute recursive loop function</span>
+    <span class="k">val</span> <span class="o">(</span><span class="n">newGammaD</span><span class="o">,</span> <span class="n">newPhiNorm</span><span class="o">,</span> <span class="n">newExpELogThetaD</span><span class="o">)</span> <span class="k">=</span> <span class="n">eStepIterator</span><span class="o">(</span><span class="n">phiNorm</span><span class="o">,</span> <span class="n">expELogThetaD</span><span class="o">,</span> <span class="n">gammaD</span><span class="o">)</span>
+    <span class="n">gammaD</span> <span class="k">=</span> <span class="n">newGammaD</span>
+    <span class="k">val</span> <span class="n">sstatTerm</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">(</span><span class="n">docCounts</span> <span class="o">/</span> <span class="n">newPhiNorm</span><span class="o">.</span><span class="n">t</span><span class="o">).</span><span class="n">t</span> <span class="o">*</span> <span class="n">newExpELogThetaD</span><span class="o">.</span><span class="n">t</span>
+    <span class="o">(</span><span class="n">sstatTerm</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">grouped</span><span class="o">(</span><span class="n">sstatTerm</span><span class="o">.</span><span class="n">cols</span><span class="o">).</span><span class="n">toArray</span><span class="o">.</span><span class="n">zip</span><span class="o">(</span><span class="n">wordIDs</span><span class="o">).</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">_2</span><span class="o">,</span> <span class="n">x</span><span class="o">.</span><span class="n">_1</span><span class="o">)),</span> <span class="n">gammaD</span><span class="o">)</span>
+  <span class="o">}</span>
+</pre></div>
+
+
+<p>However, currently our minibatch RDD only contains lists of <code>(wordId, frequency)</code> tuples (i.e. bag-of-words format).  We need to somehow combine our current minibatch RDD with the distributed topic/word matrix to get lists of <code>(wordId, frequency, row)</code> 3-tuples in order to be able to apply our new <code>map</code> function to it.  This can be done in the following way.</p>
+<ul>
+<li>Give each document in the minibatch RDD a unique Id via the <code>zipWithIndex</code> function followed by a <code>map</code> function.</li>
+<li>Apply the <code>flatMap</code> function to the RDD to produce an RDD of <code>(docId, wordId, frequency)</code> 3-tuples.</li>
+<li>Use the <code>join</code> function to join this RDD with the distributed topic/word matrix via the wordId key to produce an RDD of <code>(docId, wordId, frequency, row)</code> 4-tuples.</li>
+<li>Finally use the <code>groupByKey</code> on the <code>docId</code> field to get our minibatch RDD in the correct <code>(row, wordId, frequency)</code> 3-tuple format.</li>
+</ul>
+<p>This process is shown in the following code.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">rowIdCtRDD</span><span class="k">=</span><span class="n">bowRDD</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">()</span>   <span class="c1">//give each document and Id</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">bow</span><span class="o">,</span><span class="n">docId</span><span class="o">)=&gt;(</span><span class="n">docId</span><span class="o">,</span><span class="n">bow</span><span class="o">)}</span>   
+        <span class="o">.</span><span class="n">flatMap</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span> <span class="n">bow</span><span class="o">)</span><span class="k">=&gt;</span><span class="n">bow</span><span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">wordId</span><span class="o">,</span><span class="n">ct</span><span class="o">)=&gt;(</span><span class="n">docId</span><span class="o">,(</span><span class="n">wordId</span><span class="o">,</span><span class="n">ct</span><span class="o">))}}</span>  <span class="c1">// create desired tuple</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">docID</span><span class="o">,(</span><span class="n">wordID</span><span class="o">,</span><span class="n">ct</span><span class="o">))</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">wordID</span><span class="o">,(</span><span class="n">docID</span><span class="o">,</span><span class="n">ct</span><span class="o">))}</span>
+        <span class="o">.</span><span class="n">join</span><span class="o">(</span>
+          <span class="n">expELogBeta</span><span class="o">.</span><span class="n">rows</span><span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="n">x</span><span class="o">=&gt;(</span><span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span><span class="n">x</span><span class="o">.</span><span class="n">vector</span><span class="o">)}</span>   <span class="c1">//join to get rows matching wordIds</span>
+          <span class="o">)</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">wordId</span><span class="o">,((</span><span class="n">docId</span><span class="o">,</span><span class="n">ct</span><span class="o">),</span><span class="n">row</span><span class="o">))</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">docId</span><span class="o">,(</span><span class="n">row</span><span class="o">,</span><span class="n">wordId</span><span class="o">,</span><span class="n">ct</span><span class="o">))}</span>
+        <span class="o">.</span><span class="n">groupByKey</span><span class="o">()</span>   <span class="c1">//group by document Id</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span><span class="n">rowStats</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">rowStats</span><span class="o">.</span><span class="n">toArray</span><span class="o">}</span>
+</pre></div>
+
+
+<p>Now the E-Step can be performed on the minibatch RDD via a <code>map</code> operation followed by a <code>reduce</code> operation which simply sums the results by id.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">eStepRDD</span><span class="k">=</span><span class="n">rowIdCtRDD</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span><span class="k">=&gt;</span><span class="n">eStep</span><span class="o">(</span><span class="n">x</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">,</span> <span class="n">alpha</span><span class="o">,</span> <span class="n">gammaThreshold</span><span class="o">,</span> <span class="n">iterations</span><span class="o">).</span><span class="n">_1</span><span class="o">)</span>   <span class="c1">//perform E-Step</span>
+        <span class="o">.</span><span class="n">flatMap</span><span class="o">(</span><span class="n">z</span><span class="k">=&gt;</span><span class="n">z</span><span class="o">)</span>
+        <span class="o">.</span><span class="n">reduceByKey</span><span class="o">(</span><span class="n">arraySum</span><span class="o">)</span>  <span class="c1">//sum results by rowId</span>
+</pre></div>
+
+
+<h2>A Distributed M-Step</h2>
+<p>In the original non-distributed implementation the M-Step was easy.  The new global topc/word matrix was computed by a simple weighted sum of the previous topic\word matrix and the output of the E-Step for the current minibatch (which were both local matrices).  It is a bit more complicated with the distributed implementation because the topic/word matrix is distributed as is the result of the E-step.  Furthermore, the result of the E-step does not contain all rows of the topic/word matrix, only those corresponding to the words present in the current minibatch.  However, we can still compute the same weighted sum with a <code>leftOuterJoin</code> based on the indexes of the rows of the topic/word matrix and the result of the E-step followed by a <em>map</em> that sums the joined rows.  This is shown in the following code.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">mStepRDD</span><span class="k">=</span><span class="n">sstatsRM</span><span class="o">.</span><span class="n">rows</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span><span class="o">=&gt;(</span><span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span><span class="n">x</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">toArray</span><span class="o">))</span>   <span class="c1">//get matrix rows</span>
+        <span class="o">.</span><span class="n">leftOuterJoin</span><span class="o">(</span>  <span class="c1">//join with E-step result by rowId</span>
+          <span class="n">eStepRDD</span>
+            <span class="o">.</span><span class="n">map</span><span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">rowId</span><span class="o">,</span><span class="n">row</span><span class="o">)</span><span class="k">=&gt;</span>
+            <span class="o">(</span><span class="n">rowId</span><span class="o">,</span><span class="n">blend</span><span class="o">(</span><span class="n">rho</span><span class="o">,</span><span class="n">row</span><span class="o">,</span><span class="n">mbSize</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span> <span class="n">threadsSeen</span><span class="o">))}</span>  
+        <span class="o">)</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">rowId</span><span class="o">,(</span><span class="n">oldRow</span><span class="o">,</span> <span class="n">newRow</span><span class="o">))</span><span class="k">=&gt;</span>
+          <span class="o">(</span><span class="n">rowId</span><span class="o">,</span><span class="n">optionArraySum</span><span class="o">(</span><span class="n">oldRow</span><span class="o">,</span><span class="n">newRow</span><span class="o">))}</span>  <span class="c1">//sum matching rows</span>
+        <span class="o">.</span><span class="n">join</span><span class="o">(</span>
+          <span class="n">expELogBeta</span><span class="o">.</span><span class="n">rows</span>
+            <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span><span class="o">=&gt;(</span><span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span><span class="n">x</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">toArray</span><span class="o">))</span>
+        <span class="o">)</span>
+        <span class="o">.</span><span class="n">map</span><span class="o">{</span><span class="k">case</span> <span class="o">(</span><span class="n">rowId</span><span class="o">,(</span><span class="n">oldRow</span><span class="o">,</span> <span class="n">newRow</span><span class="o">))</span> <span class="k">=&gt;</span>
+        <span class="o">(</span><span class="n">rowId</span><span class="o">,</span><span class="n">arrayElMultiply</span><span class="o">(</span><span class="n">oldRow</span><span class="o">,</span><span class="n">newRow</span><span class="o">))}</span>  <span class="c1">//also elementwise multiply with previous matrix</span>
+</pre></div>
+
+
+<p>As you can see, this is exactly the same as performing a weighted sum of two matrices, it just takes a bit more work when they are both distributed.</p>
+<h1>The Full Algorithm</h1>
+<p>Now we are at a point at which we can describe the full algorithm.  For each minibatch of documents, the following steps are taken.</p>
+<ol>
+<li>The minibatch RDD is transformed into its bag-of-words form.</li>
+<li>The minibatch RDD is joined with the topic/word matrix RDD to get the rows corresponding to the words in the minibatch.</li>
+<li>The E-Step function is applied to the minibatch RDD.</li>
+<li>The M-Step function is applied to the output RDD of the previous step.</li>
+<li>The rows of the topic/word matrix RDD corresponding to the words in the minibatch are updated.</li>
+</ol>
+<p>These steps are repeated for each minibatch.  The following diagram illustrates this process.</p>
+<p><img alt="full algorithm" src="images/full_algorithm.png" /> </p>
+<h1>Code Demo</h1>
+<p>Now let's try this algorithm on a real dataset of documents.  Let's use the NIPS dataset that was used in the code demo from my previous post on online LDA.  In order to actually implement this algorithm, we must have a way to to iterate over minibatches.  The minibatch iterator should be implemented by the user since it is dependent on how the documents are stored. The following is the code which implements online LDA in Spark (with the minibatch iterator and Spark context code omitted).</p>
+<div class="highlight"><pre><span class="k">while</span> <span class="o">(</span><span class="n">mbIterator</span><span class="o">.</span><span class="n">hasNext</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">mb</span> <span class="k">=</span> <span class="n">mbIterator</span><span class="o">.</span><span class="n">next</span>
+
+    <span class="k">val</span> <span class="n">mbSize</span> <span class="k">=</span> <span class="n">mb</span><span class="o">.</span><span class="n">count</span><span class="o">()</span>
+
+    <span class="n">threadsSeen</span> <span class="o">+=</span> <span class="n">mbSize</span><span class="o">.</span><span class="n">toInt</span>
+    <span class="n">numUpdates</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">rho</span> <span class="k">=</span> <span class="n">math</span><span class="o">.</span><span class="n">pow</span><span class="o">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">numUpdates</span><span class="o">,</span> <span class="o">-</span><span class="n">decay</span><span class="o">)</span>
+
+    <span class="c1">//raw text to bag-of-words</span>
+    <span class="k">val</span> <span class="n">bowRDD</span> <span class="k">=</span> <span class="n">mb</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">toBagOfWords</span><span class="o">(</span><span class="n">x</span><span class="o">,</span> <span class="n">vocab</span><span class="o">))</span>
+
+    <span class="c1">//preprocess sstats matrix</span>
+    <span class="k">val</span> <span class="n">sstatsPlusEta</span> <span class="k">=</span> <span class="nc">RmElementwiseAdd</span><span class="o">(</span><span class="n">sstatsRM</span><span class="o">,</span> <span class="n">eta</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">expELogBeta</span> <span class="k">=</span> <span class="n">matrixExp</span><span class="o">(</span><span class="n">dirichletExpectation</span><span class="o">(</span><span class="n">sstatsPlusEta</span><span class="o">))</span>
+
+    <span class="c1">//preprocess minibatch RDD</span>
+    <span class="k">val</span> <span class="n">rowIdCtRDD</span> <span class="k">=</span> <span class="n">bowRDD</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">()</span>
+      <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">bow</span><span class="o">,</span> <span class="n">docId</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span> <span class="n">bow</span><span class="o">)}</span>
+      <span class="o">.</span><span class="n">flatMap</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span> <span class="n">bow</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">bow</span><span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">wordId</span><span class="o">,</span> <span class="n">ct</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span> <span class="o">(</span><span class="n">wordId</span><span class="o">,</span> <span class="n">ct</span><span class="o">))}}</span>
+      <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">docID</span><span class="o">,</span> <span class="o">(</span><span class="n">wordID</span><span class="o">,</span> <span class="n">ct</span><span class="o">))</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">wordID</span><span class="o">,</span> <span class="o">(</span><span class="n">docID</span><span class="o">,</span> <span class="n">ct</span><span class="o">))}</span>
+      <span class="o">.</span><span class="n">join</span><span class="o">(</span>
+        <span class="n">expELogBeta</span><span class="o">.</span><span class="n">rows</span><span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="n">x</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span> <span class="n">x</span><span class="o">.</span><span class="n">vector</span><span class="o">)}</span>
+      <span class="o">)</span>
+      <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">wordId</span><span class="o">,</span> <span class="o">((</span><span class="n">docId</span><span class="o">,</span> <span class="n">ct</span><span class="o">),</span> <span class="n">row</span><span class="o">))</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span> <span class="o">(</span><span class="n">row</span><span class="o">,</span> <span class="n">wordId</span><span class="o">,</span> <span class="n">ct</span><span class="o">))}</span>
+      <span class="o">.</span><span class="n">groupByKey</span><span class="o">()</span>
+      <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">docId</span><span class="o">,</span> <span class="n">rowStats</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">rowStats</span><span class="o">.</span><span class="n">toArray</span><span class="o">}</span>
+
+    <span class="c1">//perform E-Step</span>
+    <span class="k">val</span> <span class="n">eStepRDD</span> <span class="k">=</span> <span class="n">rowIdCtRDD</span>
+      <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">eStep</span><span class="o">(</span><span class="n">x</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">,</span> <span class="n">alpha</span><span class="o">,</span> <span class="n">gammaThreshold</span><span class="o">,</span> <span class="n">iterations</span><span class="o">).</span><span class="n">_1</span><span class="o">)</span>
+      <span class="o">.</span><span class="n">flatMap</span><span class="o">(</span><span class="n">z</span> <span class="k">=&gt;</span> <span class="n">z</span><span class="o">)</span>
+      <span class="o">.</span><span class="n">reduceByKey</span><span class="o">(</span><span class="n">arraySum</span><span class="o">)</span>
+
+    <span class="c1">//perform M-Step</span>
+    <span class="k">val</span> <span class="n">mStepRDD</span> <span class="k">=</span> <span class="n">sstatsRM</span><span class="o">.</span><span class="n">rows</span>
+      <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span> <span class="n">x</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">toArray</span><span class="o">))</span>
+      <span class="o">.</span><span class="n">leftOuterJoin</span><span class="o">(</span>
+        <span class="n">eStepRDD</span>
+          <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">rowId</span><span class="o">,</span> <span class="n">row</span><span class="o">)</span> <span class="k">=&gt;</span>
+          <span class="o">(</span><span class="n">rowId</span><span class="o">,</span> <span class="n">blend</span><span class="o">(</span><span class="n">rho</span><span class="o">,</span> <span class="n">row</span><span class="o">,</span> <span class="n">mbSize</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span> <span class="n">threadsSeen</span><span class="o">))</span>
+        <span class="o">}</span>
+      <span class="o">)</span>
+      <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">rowId</span><span class="o">,</span> <span class="o">(</span><span class="n">oldRow</span><span class="o">,</span> <span class="n">newRow</span><span class="o">))</span> <span class="k">=&gt;</span>
+      <span class="o">(</span><span class="n">rowId</span><span class="o">,</span> <span class="n">optionArraySum</span><span class="o">(</span><span class="n">oldRow</span><span class="o">,</span> <span class="n">newRow</span><span class="o">))</span>
+    <span class="o">}</span>
+      <span class="o">.</span><span class="n">join</span><span class="o">(</span>
+        <span class="n">expELogBeta</span><span class="o">.</span><span class="n">rows</span>
+          <span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">toInt</span><span class="o">,</span> <span class="n">x</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">toArray</span><span class="o">))</span>
+      <span class="o">)</span>
+      <span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="k">case</span> <span class="o">(</span><span class="n">rowId</span><span class="o">,</span> <span class="o">(</span><span class="n">oldRow</span><span class="o">,</span> <span class="n">newRow</span><span class="o">))</span> <span class="k">=&gt;</span>
+      <span class="o">(</span><span class="n">rowId</span><span class="o">,</span> <span class="n">arrayElMultiply</span><span class="o">(</span><span class="n">oldRow</span><span class="o">,</span> <span class="n">newRow</span><span class="o">))</span>
+    <span class="o">}</span>
+
+    <span class="c1">//update sstats matrix</span>
+    <span class="n">sstatsRM</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">IndexedRowMatrix</span><span class="o">(</span>
+      <span class="n">mStepRDD</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="nc">IndexedRow</span><span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">_1</span><span class="o">.</span><span class="n">toLong</span><span class="o">,</span> <span class="nc">Vectors</span><span class="o">.</span><span class="n">dense</span><span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">_2</span><span class="o">)))</span>
+    <span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="c1">//print learned topics</span>
+  <span class="n">showTopics</span><span class="o">(</span><span class="mi">10</span><span class="o">,</span> <span class="n">sstatsRM</span><span class="o">,</span> <span class="n">id2Word</span><span class="o">)</span>
+</pre></div>
+
+
+<p>The above code produces the following topics</p>
+<div class="highlight"><pre><span class="nx">Topic</span> <span class="mi">0</span><span class="o">:</span> <span class="nx">List</span><span class="p">((</span><span class="nx">activity</span><span class="p">,</span><span class="mf">0.032092510865724705</span><span class="p">),</span> <span class="p">(</span><span class="nx">voltage</span><span class="p">,</span><span class="mf">0.028580820005928525</span><span class="p">),</span> <span class="p">(</span><span class="nx">neurons</span><span class="p">,</span><span class="mf">0.025338836825008867</span><span class="p">),</span> <span class="p">(</span><span class="nx">cortex</span><span class="p">,</span><span class="mf">0.024546295981522796</span><span class="p">),</span> <span class="p">(</span><span class="nx">rhythmic</span><span class="p">,</span><span class="mf">0.023029320016109932</span><span class="p">),</span> <span class="p">(</span><span class="nx">wta</span><span class="p">,</span><span class="mf">0.02047031045772205</span><span class="p">),</span> <span class="p">(</span><span class="nx">tones</span><span class="p">,</span><span class="mf">0.02044761938141161</span><span class="p">),</span> <span class="p">(</span><span class="nx">obs</span><span class="p">,</span><span class="mf">0.016662670108027338</span><span class="p">),</span> <span class="p">(</span><span class="nx">analog</span><span class="p">,</span><span class="mf">0.01639142696901859</span><span class="p">),</span> <span class="p">(</span><span class="nx">cortical</span><span class="p">,</span><span class="mf">0.016364893763539945</span><span class="p">))</span>
+
+<span class="nx">Topic</span> <span class="mi">1</span><span class="o">:</span> <span class="nx">List</span><span class="p">((</span><span class="nx">inference</span><span class="p">,</span><span class="mf">0.06811446156014736</span><span class="p">),</span> <span class="p">(</span><span class="nx">models</span><span class="p">,</span><span class="mf">0.038610276907281436</span><span class="p">),</span> <span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="mf">0.03699453925479673</span><span class="p">),</span> <span class="p">(</span><span class="nx">prior</span><span class="p">,</span><span class="mf">0.033185332552837114</span><span class="p">),</span> <span class="p">(</span><span class="nx">posterior</span><span class="p">,</span><span class="mf">0.032290300391455466</span><span class="p">),</span> <span class="p">(</span><span class="nx">probability</span><span class="p">,</span><span class="mf">0.025078686881619315</span><span class="p">),</span> <span class="p">(</span><span class="nx">parent</span><span class="p">,</span><span class="mf">0.02041949893883364</span><span class="p">),</span> <span class="p">(</span><span class="nx">parameters</span><span class="p">,</span><span class="mf">0.018027714272498996</span><span class="p">),</span> <span class="p">(</span><span class="nx">gaussian</span><span class="p">,</span><span class="mf">0.017631357263122132</span><span class="p">),</span> <span class="p">(</span><span class="nx">log</span><span class="p">,</span><span class="mf">0.017515618349787442</span><span class="p">))</span>
+
+<span class="nx">Topic</span> <span class="mi">2</span><span class="o">:</span> <span class="nx">List</span><span class="p">((</span><span class="nx">state</span><span class="p">,</span><span class="mf">0.04652001892330229</span><span class="p">),</span> <span class="p">(</span><span class="nx">policy</span><span class="p">,</span><span class="mf">0.04113501660902407</span><span class="p">),</span> <span class="p">(</span><span class="nx">eligibility</span><span class="p">,</span><span class="mf">0.03905536641647694</span><span class="p">),</span> <span class="p">(</span><span class="nx">sarsa</span><span class="p">,</span><span class="mf">0.03905536631097504</span><span class="p">),</span> <span class="p">(</span><span class="nx">truncated</span><span class="p">,</span><span class="mf">0.03326530692419029</span><span class="p">),</span> <span class="p">(</span><span class="nx">traces</span><span class="p">,</span><span class="mf">0.03142425104787902</span><span class="p">),</span> <span class="p">(</span><span class="nx">memoryless</span><span class="p">,</span><span class="mf">0.027722772212976254</span><span class="p">),</span> <span class="p">(</span><span class="nx">policies</span><span class="p">,</span><span class="mf">0.024839780749834842</span><span class="p">),</span> <span class="p">(</span><span class="nx">agent</span><span class="p">,</span><span class="mf">0.02303785156504393</span><span class="p">),</span> <span class="p">(</span><span class="nx">pomdps</span><span class="p">,</span><span class="mf">0.02301863583267124</span><span class="p">))</span>
+
+<span class="nx">Topic</span> <span class="mi">3</span><span class="o">:</span> <span class="nx">List</span><span class="p">((</span><span class="nx">algorithm</span><span class="p">,</span><span class="mf">0.02135927293979804</span><span class="p">),</span> <span class="p">(</span><span class="nx">learning</span><span class="p">,</span><span class="mf">0.010459512976094452</span><span class="p">),</span> <span class="p">(</span><span class="nx">error</span><span class="p">,</span><span class="mf">0.008990052150829781</span><span class="p">),</span> <span class="p">(</span><span class="nx">weight</span><span class="p">,</span><span class="mf">0.0073065564236364155</span><span class="p">),</span> <span class="p">(</span><span class="kd">function</span><span class="p">,</span><span class="mf">0.007146485129287556</span><span class="p">),</span> <span class="p">(</span><span class="nx">vector</span><span class="p">,</span><span class="mf">0.006762208984454446</span><span class="p">),</span> <span class="p">(</span><span class="nx">number</span><span class="p">,</span><span class="mf">0.006051699485084758</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="nx">rcb</span><span class="o">-</span><span class="p">,</span><span class="mf">0.005855829811131096</span><span class="p">),</span> <span class="p">(</span><span class="nx">results</span><span class="p">,</span><span class="mf">0.005837170436069406</span><span class="p">),</span> <span class="p">(</span><span class="nx">probability</span><span class="p">,</span><span class="mf">0.005788740947910415</span><span class="p">))</span>
+
+<span class="nx">Topic</span> <span class="mi">4</span><span class="o">:</span> <span class="nx">List</span><span class="p">((</span><span class="nx">attentional</span><span class="p">,</span><span class="mf">0.031205396268822388</span><span class="p">),</span> <span class="p">(</span><span class="nx">image</span><span class="p">,</span><span class="mf">0.030771091189727498</span><span class="p">),</span> <span class="p">(</span><span class="nx">location</span><span class="p">,</span><span class="mf">0.02025190023001232</span><span class="p">),</span> <span class="p">(</span><span class="nx">images</span><span class="p">,</span><span class="mf">0.01848811029404064</span><span class="p">),</span> <span class="p">(</span><span class="nx">target</span><span class="p">,</span><span class="mf">0.01788585445419973</span><span class="p">),</span> <span class="p">(</span><span class="nx">streams</span><span class="p">,</span><span class="mf">0.014740100512122468</span><span class="p">),</span> <span class="p">(</span><span class="nx">field</span><span class="p">,</span><span class="mf">0.014659463334666768</span><span class="p">),</span> <span class="p">(</span><span class="nx">tones</span><span class="p">,</span><span class="mf">0.014100436801905392</span><span class="p">),</span> <span class="p">(</span><span class="nx">bottom</span><span class="o">-</span><span class="nx">up</span><span class="p">,</span><span class="mf">0.013031110714897202</span><span class="p">),</span> <span class="p">(</span><span class="nx">dts</span><span class="p">,</span><span class="mf">0.012683978720498826</span><span class="p">))</span>
+</pre></div>
+
+
+<p>As you can see, these topics seem quite coherent and roughly correspond to different fields of machine learning.</p>
+<h1>References</h1>
+<ul>
+<li><a href="https://github.com/alexminnaar/SparkOnlineLDA">Github repo</a> containing example code.</li>
+<li><a href="http://alexminnaar.com/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Previous post</a> on online LDA.</li>
+<li><a href="http://spark.apache.org/docs/1.2.1/programming-guide.html">Spark programming guide</a>.</li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
         
         
 
@@ -733,105 +1055,6 @@ Topic 5: disparity, binding, similarity, protein, structural, clause, instructio
 <li>The original Paper on LDA that uses variational inference instead of Gibbs sampling.  <a href="http://machinelearning.wustl.edu/mlpapers/paper_files/BleiNJ03.pdf">Latent Dirichlet Allocation - Blei, Ng, Jordan</a></li>
 <li>The original paper on collapsed Gibbs sampling for LDA.  <a href="http://psiexp.ss.uci.edu/research/papers/SteyversGriffithsLSABookFormatted.pdf">Probabilistic Topic Models - Griffiths, Steyvers</a></li>
 <li>Another nice technical report that shows much more detail than what I have shown.  <a href="http://http://www.arbylon.net/publications/text-est.pdf">Parameter Estimation for Text Analysis - Heinrich</a></li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-7.html">Facebook Recruiting III Keyword Extraction - Part 7</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2013-11-24T00:00:00+01:00">
-          on&nbsp;Sun 24 November 2013
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><h2>Parameter Tuning</h2>
-<p>Now the time has come to perform an actual out-of-sample test of our association rule algorithm.  The training data set has about 6 million rows so the association rule algorithm will be trained on 5 million rows and the remaining 1 million rows will be held out for testing.  From this we can accomplish two goals</p>
-<p>It gives us an idea of how well our algorithm will perform on the actual test set without actually having to submit anything on the Kaggle website (you are only allowed 2 submissions per day).
-It allows us to tune the parameters of our algorithm to achieve the best performance on our hold-out data set.
-However, before we start tuning parameters we should first formalize our classification algorithm.</p>
-<h3>Classification Algorithm</h3>
-<p>The classification algorithm is fairly simple.  The following pseudo-code illustrates how it works</p>
-<div class="highlight"><pre>I={}
-For r in AR:
-     if C(r)&gt;α AND supp(r)&gt;β AND r not in I:
-          I.append(r)
-</pre></div>
-
-
-<p>The input to the algorithm is the learned association rules from both the post title and post body <span class="math">\(AR\)</span>.  <span class="math">\(I\)</span> denotes the set of tags that will be predicted for the given post, so initially <span class="math">\(I\)</span> is empty.  The algorithm searches through <span class="math">\(AR\)</span> to find association rules <span class="math">\(r\)</span> with confidence above a certain threshold <span class="math">\(\alpha\)</span> and support above a certain threshold <span class="math">\(\beta\)</span>.  The tags in these association rules are then added to the set <span class="math">\(I\)</span> which become the predicted tags for this post.</p>
-<p>So we need to find the optimal parameters <span class="math">\(\alpha\)</span> and <span class="math">\(\beta\)</span>.  One way to do this is to vary these parameters and see how their values affect the test error.  The parameter values that produce the best test performance are the ones we would use.  Before we can do this, we must decide on a loss function.  Kaggle says that the loss function that submissions are scored upon is the mean F1-score loss function.  The mean F1-score loss function is defined as</p>
-<p><span class="math">\(F1=2\frac{p \cdot r}{p+r}\)</span> where <span class="math">\(p=\frac{tp}{tp+fp}\)</span> and <span class="math">\(r=\frac{tp}{tp+fn}\)</span></p>
-<p>This loss function means that both precision (<span class="math">\(p\)</span>) and recall (<span class="math">\(r\)</span>) are weighted equally so both must be optimized in order to obtain the best score. The F1-score can be written in Python code as the following</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">F1_score</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span><span class="n">predicted</span><span class="p">):</span>
-    <span class="n">tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
-    <span class="n">predicted</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span>
-    <span class="n">tp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span> <span class="o">&amp;</span> <span class="n">predicted</span><span class="p">)</span>
-    <span class="n">fp</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
-    <span class="n">fn</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">-</span> <span class="n">tp</span>
-
-    <span class="k">if</span> <span class="n">tp</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
-        <span class="n">precision</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fp</span><span class="p">)</span>
-        <span class="n">recall</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">tp</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">tp</span><span class="o">+</span><span class="n">fn</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="mi">2</span><span class="o">*</span><span class="p">((</span><span class="n">precision</span><span class="o">*</span><span class="n">recall</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">precision</span><span class="o">+</span><span class="n">recall</span><span class="p">))</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">return</span> <span class="mi">0</span>
-</pre></div>
-
-
-<p>predicted is the list of tags that the classification algorithm predicts for a given post in the hold-out set and tags is the list of actual tags for that post.  These lists are then converted to Python sets so that tp, fp, and fn can be computed efficiently.</p>
-<h3>Varying the Parameters</h3>
-<p>Now that we have a cost function, we can run some tests to calibrate our parameters α and β.  As stated earlier, we split the data set into a training set and test set - mine association rules from the training set and test their performance on the test set.</p>
-<h3>Why not use cross-validation?</h3>
-<p>Usually one should use k-fold cross-validation to learn the optimal parameter values as it would give the most unbiased representation of the algorithm's performance on unseen data.  However, 5-fold cross-validation was tried initially but it became clear that validation errors for each of the 5 validation sets were very similar so taking the average would not be much different than the error of one of the validation sets.  For this reason (and the fact that each test will take 1/5th of the time), a single test set was used instead.</p>
-<h2>Results</h2>
-<p>After considering many combinations of support and confidence values, the best F1-score was found to be <strong>0.74021</strong> with confidence=0.5 and support=5.  The number 1 score was 0.81350 so I was not too far off.</p>
-<p>There were many different strategies that I wanted to try but did not have time to implement.  Here is a list of improvements/alternative strategies that I would have liked to try if I had enough time.</p>
-<ul>
-<li>About 50,000 posts in the test set were predicted to have zero tags because there were no association rules for them that fell within the acceptable threshold.  These posts were scored as zero.  However, F1-score can never be negative so any random guess of tags could only improve the score.  A naive solution would be to simply use the baseline tags (i.e. javascript c# python php java) as predictions for these posts, however I suspect that there would be a more clever way of doing this.</li>
-<li>The opposite problem also occurs in some predictions.  Some posts are predicted to have 8, 9, 10+ tags.  Given what we know from the training set and this kaggle thread, the maximum number of tags is 5 (and it is also quite rare to have that many).  This does not necessarily mean that we should cut off all predictions at 5 tags, but certainly 10+ tags is not a sensible number of tags to predict.  So I think that is very likely that our score would increase if we reduced the number of tags in these cases.</li>
-<li>I considered each post as a bag-of-words - meaning that I only cared which words appeared in the post, not their ordering.  However, I suspect that if I was able to build bigram-based association rules, I could increase the classifier performance.  For example, if a post title contains the bigram "linux server", my current classifier would look at the association rules for "linux" and "server" independently and it might be unlikely that it would predict the tag "linux-server" for either of those terms.  However, I suspect that a bigram association rule between "linux server" and "linux-server" would be much more likely.  The trade-off is that it would be much more difficult to mine bigram association rules on a single computer in terms of memory capacity.</li>
-<li>Another strategy would be to abandon the association rule classification strategy altogether and consider a more classical method.  One such method would be to create a very sparse binary valued matrix from the training set where each feature is a word that could appear in a post (assign it a value of 1 if it does, 0 if is doesn't).  Then use well-known classification methods to model the relationship between the input matrix and the output tags.  However, I would imagine that this could present problems due to the size and sparsity of this matrix.</li>
 </ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');

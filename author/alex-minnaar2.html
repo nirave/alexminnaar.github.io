@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
                 <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
                 <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
                 <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
@@ -62,6 +63,318 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-12-27T00:00:00+01:00">
+          on&nbsp;Sat 27 December 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><h2>The Multithreading Problem</h2>
+<p>Nowadays, computers have multiple execution cores meaning that they can execute multiple tasks at the same time rather than sequentially.  Obviously this makes things much faster but it also presents some new problems.  The term <em>multithreading</em> refers to the process in which multiple threads execute code in the same program simultaneously.  The inherent problem with multithreading lies in the fact that although each thread acts independently, their memory is shared.  Therefore, it is possible for threads to change shared memory values without other threads knowing which can create problems.  Let's use a bank account as an example.  Consider the following code that implements a bank account with <code>deposit</code> and <code>withdraw</code> methods.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">BankAccount</span><span class="o">{</span>
+
+    <span class="k">private</span> <span class="k">var</span> <span class="n">balance</span> <span class="k">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="n">deposit</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> 
+        <span class="k">if</span> <span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">+</span> <span class="n">amount</span>
+
+    <span class="k">def</span> <span class="n">withdraw</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span>
+        <span class="k">if</span> <span class="o">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">amount</span> <span class="o">&amp;&amp;</span> <span class="n">amount</span> <span class="o">&lt;=</span> <span class="n">balance</span><span class="o">){</span>
+            <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">-</span> <span class="n">amount</span>
+            <span class="n">balance</span>
+        <span class="o">}</span> <span class="k">else</span> <span class="k">throw</span> <span class="k">new</span> <span class="nc">Error</span><span class="o">(</span><span class="s">&quot;insufficient funds&quot;</span><span class="o">)</span>
+
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Here is a scenario where multithreading can cause problems.  Let's say that <code>balance</code>=40 dollars and <em>thread A</em> would like to withdraw 30 dollars. This satisfies both conditions in the <em>if</em> statement so <em>thread A</em> enters the code block where the 30 dollars is subtracted from the balance.  However, before <em>thread A</em> changes the balance, a second thread, <em>thread B</em>, wants to withdraw 20 dollars.  Since <em>thread A</em> has not yet changed the balance, <em>thread B</em> also satisfies the <em>if</em> statement and enters the code block where the balance can be changed.  So <em>thread A</em> subtracts $30 from the balance and then <em>thread B</em> subtracts 20 dollars from the balance leaving us with a balance of -10 dollars. Clearly, this is a problem!</p>
+<p>Hopefully it is clear that the problem comes from the fact that the shared <em>balance</em> variable can be changed by any thread at any time so no thread can really be sure what value it holds.  One solution is for a thread to be able to reserve the memory values that it will be using so that no other thread can change them.  This is called <em>locking</em>.</p>
+<h3>Using Locks (Synchronous)</h3>
+<p>As stated previously, locking tries to solve the multithreading problem by <em>protecting</em> the shared memory value (in this case <code>balance</code>). Scala does this with <em>synchronization</em>.  Consider the same code as above but now each method definition is wrapped in <code>this.synchronized</code>.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">BankAccount</span><span class="o">{</span>
+
+    <span class="k">private</span> <span class="k">var</span> <span class="n">balance</span> <span class="k">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="n">deposit</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">+</span> <span class="n">amount</span>
+    <span class="o">}</span>
+
+    <span class="k">def</span> <span class="n">withdraw</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">amount</span> <span class="o">&amp;&amp;</span> <span class="n">amount</span> <span class="o">&lt;=</span> <span class="n">balance</span><span class="o">){</span>
+            <span class="n">balance</span> <span class="k">=</span> <span class="n">balance</span> <span class="o">-</span> <span class="n">amount</span>
+            <span class="n">balance</span>
+        <span class="o">}</span> <span class="k">else</span> <span class="k">throw</span> <span class="k">new</span> <span class="nc">Error</span><span class="o">(</span><span class="s">&quot;insufficient funds&quot;</span><span class="o">)</span>
+   <span class="o">}</span>
+
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Now <code>deposit</code> and <code>withdraw</code> each exit as one atomic unit meaning that only one thread can access them at a time (all others are blocked and must wait until the blocking thread is finished).  Now that all methods that can change <code>balance</code> are synchronized, conflicts such as the ones described above can no longer occur.  Unfortunately, the problem still is not completely solved because synchronization produces a few new problems.  For example, consider another <code>BankAccount</code> method called <code>transfer</code> which withdraws money from one account and deposits it into another with the following synchronized code.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="n">transfer</span><span class="o">(</span><span class="n">from</span><span class="k">:</span> <span class="kt">BankAccount</span><span class="o">,</span> <span class="n">to</span><span class="k">:</span> <span class="kt">BankAccount</span><span class="o">,</span> <span class="n">amount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="n">from</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
+        <span class="n">to</span><span class="o">.</span><span class="n">synchronized</span> <span class="o">{</span>
+            <span class="n">from</span><span class="o">.</span><span class="n">withdraw</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
+            <span class="n">to</span><span class="o">.</span><span class="n">deposit</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The withdrawal and deposit steps must be synchronized so that no thread can access the balance between withdrawal and deposit (at this point the amount transfered would not be anywhere).  The problem occurs when <em>thread A</em> wants to transfer money from <em>account A</em> to <em>account B</em> at the same time that <em>thread B</em> wants to transfer money from <em>account B</em> to <em>account A</em>.  When this happens <em>thread A</em> would lock <em>account A</em> and <em>thread B</em> would lock <em>account B</em> and each thread would wait for the other to release the lock which would take forever!  This is not good and it is called a <em>dead-lock</em> which is a common problem with synchronization.  There are ways of dealing with <em>dead-locks</em> but they are complicated and can make your code difficult to read.  In addition, stopping and starting threads when they become blocked turns out to be very bad for CPU utilization which will make your code run slower.  It would be much better if we could deal with this multithreading problem in such a way that we do not have to use any kind of blocking.  This is what the Akka actor model does.</p>
+<h3>Using Actors (Asynchronous)</h3>
+<p>Akka actors are fully encapsulated entities.  Changes to their internal state can only be done through passing known messages.  Message passing between actors is one-way and completely asynchronous (i.e. unblocking) so when an actor sends a message it does not have to wait for a reply, it can continue performing other tasks.  If multiple messages are sent to a single actor, it will process them sequentially in a queue (so internally an actor is single-threaded).  If a received message changes an actor's internal state, the change is reflected immediately after the message has been processed.  Therefore, processing one message is the atomic unit of execution (it can never be interrupted).</p>
+<p>In terms of our bank account example, let's create a <code>BankAccount</code> actor that can receive <code>Deposit</code> and <code>Withdraw</code> messages.  In Scala, we create an actor by extending the <code>Actor</code> trait and implementing its <code>receive</code> method.  We must also define the messages that it can send and recieve in the actor's companion object.  The following is an actor-based <code>BankAccount</code> implementation.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">BankAccount</span> <span class="o">{</span>
+
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Deposit</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">require</span><span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Withdraw</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">require</span><span class="o">(</span><span class="n">amount</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Done</span>
+
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Failed</span>
+
+<span class="o">}</span>
+
+<span class="c1">//Actor that receives messages to perform actions of a bank account</span>
+<span class="k">class</span> <span class="nc">BankAccount</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">BankAccount._</span>
+
+  <span class="k">var</span> <span class="n">balance</span> <span class="k">=</span> <span class="nc">BigInt</span><span class="o">(</span><span class="mi">0</span><span class="o">)</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
+    <span class="c1">//Deposit messages add amount to balance state</span>
+    <span class="k">case</span> <span class="nc">Deposit</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span> <span class="k">=&gt;</span>
+      <span class="n">balance</span> <span class="o">+=</span> <span class="n">amount</span>
+      <span class="n">sender</span> <span class="o">!</span> <span class="nc">Done</span>
+
+    <span class="c1">//Withdraw messages subtract amount from balance state</span>
+    <span class="k">case</span> <span class="nc">Withdraw</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span> <span class="k">if</span> <span class="n">amount</span> <span class="o">&lt;=</span> <span class="n">balance</span> <span class="k">=&gt;</span>
+      <span class="n">balance</span> <span class="o">-=</span> <span class="n">amount</span>
+      <span class="n">sender</span> <span class="o">!</span> <span class="nc">Done</span>
+
+    <span class="c1">//Any other message would return a failure to the sender</span>
+    <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">sender</span> <span class="o">!</span> <span class="nc">Failed</span>
+  <span class="o">}</span>
+
+<span class="o">}</span>
+</pre></div>
+
+
+<p>In the <code>BankAccount</code> companion object four messages are defined <code>Deposit</code>, <code>Withdraw</code>, <code>Done</code>, and <code>Failed</code>.  In the <code>receive</code> method in the <code>BankAccount</code> class defines how to change the <code>balance</code> variable when either the <code>Deposit</code> or the <code>Withdraw</code> method is received.  Once this is finished, a <code>Done</code> message is passed back to the actor that sent it via the <code>sender</code> variable (an actor's reference is always tied to the message it sends).  If any other message is received, then a <code>Failed</code> message is sent back to the sending actor.</p>
+<p>But we also want to use an actor to transfer money between accounts.  You may remember that this had the potential to produce a <em>dead-lock</em> when done synchronously. We can avoid this using actors because now blocking is replaced with enqueuing messages.  Let's call this actor <code>WireTransfer</code>.  This actor can receive a <code>Transfer</code> message which contains three fields - a reference to the sending <code>BankAccount</code> actor, a reference to the receiving <code>BankAccount</code> actor, and the amount to be transferred.  When <code>WireTransfer</code> receives this message, it sends a <code>Withdraw</code> message (defined within the <code>BankAccount</code> companion object) to the sending actor, awaits a successful <code>Done</code> response, then sends a <code>Deposit</code> message to the recieving actor.  The following code implements the <code>WireTransfer</code> actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">WireTransfer</span> <span class="o">{</span>
+
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Transfer</span><span class="o">(</span><span class="n">from</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">to</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span>
+
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Done</span>
+
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Failed</span>
+
+<span class="o">}</span>
+
+<span class="c1">//actor implementing the actions of a wire transfer between two bank account actors</span>
+<span class="k">class</span> <span class="nc">WireTransfer</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">WireTransfer._</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
+    <span class="c1">//If Transfer message is received, send withdraw message to &#39;from&#39; and wait for reply</span>
+    <span class="k">case</span> <span class="nc">Transfer</span><span class="o">(</span><span class="n">from</span><span class="o">,</span> <span class="n">to</span><span class="o">,</span> <span class="n">amount</span><span class="o">)</span> <span class="k">=&gt;</span>
+      <span class="n">from</span> <span class="o">!</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Withdraw</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">awaitFrom</span><span class="o">(</span><span class="n">to</span><span class="o">,</span> <span class="n">amount</span><span class="o">,</span> <span class="n">sender</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="c1">//If Withdraw was successful, send deposit to other bank account actor, or else give them a failure message</span>
+  <span class="k">def</span> <span class="n">awaitFrom</span><span class="o">(</span><span class="n">to</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">,</span> <span class="n">customer</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span>
+      <span class="n">to</span> <span class="o">!</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Deposit</span><span class="o">(</span><span class="n">amount</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">awaitTo</span><span class="o">(</span><span class="n">customer</span><span class="o">))</span>
+    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Failed</span> <span class="k">=&gt;</span>
+      <span class="n">customer</span> <span class="o">!</span> <span class="nc">Failed</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="c1">//If deposit was successful, send &#39;Done&#39; to original actor that sent Transfer message</span>
+  <span class="k">def</span> <span class="n">awaitTo</span><span class="o">(</span><span class="n">customer</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span>
+      <span class="n">customer</span> <span class="o">!</span> <span class="nc">Done</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>When the actor first receives the <code>Transfer</code> message, it sends a <code>Withdraw</code> message to the <code>BankAccount</code> actor referenced in the <code>from</code> field of the message.  Then the actor must wait until a <code>Done</code> message is received (it does this with the <code>context.become()</code> method) at which point it sends a <code>Deposit</code> message to the other <code>BankAccount</code> actor.</p>
+<p>We can also test this transfer process by creating a new actor that creates two <code>BankAccount</code> actors and a <code>WireTransfer</code> actor and then sends a <code>Transfer</code> message to the <code>WireTransfer</code> actor which references both of the <code>BankAccount</code> actors.  But before the <code>Transfer</code> message is sent, the actor must deposit some money in the first <code>BankAccount</code> actor so that there is some money available to transfer.  Let's call this actor <code>TransferMain</code> and here is its implementation.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">TransferMain</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="c1">//First create two BankAccount actors</span>
+  <span class="k">val</span> <span class="n">accountA</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">[</span><span class="kt">BankAccount</span><span class="o">],</span> <span class="s">&quot;accountA&quot;</span><span class="o">)</span>
+  <span class="k">val</span> <span class="n">accountB</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">[</span><span class="kt">BankAccount</span><span class="o">],</span> <span class="s">&quot;accountB&quot;</span><span class="o">)</span>
+
+  <span class="c1">//send a deposit message to accountA</span>
+  <span class="n">accountA</span> <span class="o">!</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Deposit</span><span class="o">(</span><span class="mi">100</span><span class="o">)</span>
+
+  <span class="c1">//If a &#39;Done&#39; message is received back, call a transfer function</span>
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="nc">LoggingReceive</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">BankAccount</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span> <span class="n">transfer</span><span class="o">(</span><span class="mi">70</span><span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="c1">//transfer function creates a transacton actor and sends a &#39;Transfer&#39; message to it between</span>
+  <span class="c1">//accountA and accountB for the specified amount.</span>
+  <span class="k">def</span> <span class="n">transfer</span><span class="o">(</span><span class="n">amount</span><span class="k">:</span> <span class="kt">BigInt</span><span class="o">)</span><span class="k">:</span> <span class="kt">Unit</span> <span class="o">=</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">transaction</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">[</span><span class="kt">WireTransfer</span><span class="o">],</span> <span class="s">&quot;transfer&quot;</span><span class="o">)</span>
+
+    <span class="n">transaction</span> <span class="o">!</span> <span class="nc">WireTransfer</span><span class="o">.</span><span class="nc">Transfer</span><span class="o">(</span><span class="n">accountA</span><span class="o">,</span> <span class="n">accountB</span><span class="o">,</span> <span class="n">amount</span><span class="o">)</span>
+
+    <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="nc">LoggingReceive</span> <span class="o">{</span>
+      <span class="k">case</span> <span class="nc">WireTransfer</span><span class="o">.</span><span class="nc">Done</span> <span class="k">=&gt;</span>
+        <span class="n">println</span><span class="o">(</span><span class="s">&quot;successs&quot;</span><span class="o">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
+      <span class="k">case</span> <span class="nc">WireTransfer</span><span class="o">.</span><span class="nc">Failed</span> <span class="k">=&gt;</span>
+        <span class="n">println</span><span class="o">(</span><span class="s">&quot;failed&quot;</span><span class="o">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
+    <span class="o">})</span>
+
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>As you can see from the above code, 100 dollars is deposted in <code>accountA</code> via the <code>Deposit</code> message.  Then, when the <code>Done</code> message is recieved, the <code>transfer</code> function is called with an argument of 70 dollars.  Inside the <code>transfer</code> function, a <code>WireTransfer</code> actor is created and a <code>Transfer</code> message is sent to it with the appropriate arguments.  It then waits for either a <code>Done</code> or <code>Failed</code> message in return.</p>
+<p>Hopefully this blog post has shed some light on the multithreading problem and how the Akka actor model tries to solve it.</p>
+<h2>References</h2>
+<ul>
+<li>This bank account example was taken from the <a href="https://www.coursera.org/course/reactive">Principles of Reactive Programming</a> Coursera course.</li>
+<li>The full code snippets can be found <a href="https://github.com/alexminnaar/Scala_Code_Snippets/tree/master/src/main/scala/BankAccount">on github</a>.</li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-11-11T00:00:00+01:00">
+          on&nbsp;Tue 11 November 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>The <a href="http://nlp.stanford.edu/software/CRF-NER.shtml">Stanford NER (named entity recognizer) tool</a> is a widely-used, general purpose named entity recognition tool that Stanford has made available as part of its CoreNLP Java library.  It performs named entity recognition via a CRF-based sequence model which has been known to give near state-of-the-art performance results which makes it a popular choice for open-source NER tools.</p>
+<p>Having said that, I have used this tool in the past and I was left wanting more functionality.  From its <a href="http://nlp.stanford.edu/software/crf-faq.shtml">FAQ section</a>, you can see that most of its functionality (i.e. training and testing a NER model) is designed to be performed using the command line.  But what if you want to use a pre-trained NER model as part of a real-time text processing pipeline?  For example, you are processing a string of text and you want to apply your NER model to the text and then do something with the tokens corresponding to classified named entities.  There is no clear way to do this with the Stanford NER tool.</p>
+<p>I have also found that the Stanford NER tool is lacking in its model validation functionality.  Just like any classification model, I want to be able to perform cross-validation tests on my training data so that I can be confident in its generalized performance.  Again, there is no clear way of doing this.  You can test your model on a test set and obtain the precision, recall and F1 values but unfortunately these values are just shown in standard output and there is no way to persist them.  Consequently, if you wanted to perform 50-fold cross-validation on your dataset you would have to visually read each of the 50 sets of performance metrics off the screen and then manually average them to get your desired result (or export standard output and parse it).  Obviously no one wants to do this.</p>
+<p><a href="https://github.com/alexminnaar/ScalaNER">ScalaNER</a> attempts to solve these problems by offering the following additional functionality to the Stanford NER tool.</p>
+<ul>
+<li>Programmatically apply a pre-trained NER model to a string of text and output the labelled result.</li>
+<li>Programmatically train an NER model.</li>
+<li>Easy model validation.  Specifically cross-validation.</li>
+</ul>
+<h2>ScalaNER Demo</h2>
+<p>The following code samples demonstrate this new functionality.  First of all, it should be noted that the training data sets must be in the same format that the Stanford NER tool accepts.  That is, each line must contain a tab-separated token/label pair.  Entity labels can be any string but non-entity labels must be "O".  For example, training data for a person name entity might look like</p>
+<div class="highlight"><pre>The    O
+US    O
+president    O
+is    O
+Barrack    NAME
+Obama    NAME
+</pre></div>
+
+
+<p>where named entities are labelled as "NAME" and non-entity tokens are labelled as "O".</p>
+<h3>Train an NER Model</h3>
+<p>First we will demonstrate how to train a NER model given a training dataset in the format explained above.  The code is very simple - in fact it is only one line.  It uses a Scala object called <code>NERModel</code>.  To train an NER model you simply call this object's <code>trainClassifier</code> method which takes two arguments, the location of the training data file (it must be a text file) and the filename and location where the the trained NER model will be saved.</p>
+<div class="highlight"><pre><span class="nc">NERModel</span><span class="o">.</span><span class="n">trainClassifier</span><span class="o">(</span><span class="s">&quot;my/data/location.txt&quot;</span><span class="o">,</span> <span class="s">&quot;save/my/model/here.ser.gz&quot;</span><span class="o">)</span>
+</pre></div>
+
+
+<h3>Apply an NER Model</h3>
+<p>Then once you have trained your NER model you will probably want to apply this model to some new text.  To do this we use the <code>ApplyModel</code> class which takes the location of the trained model as a constructor.  Once this class has been instantiated, we call its <code>runNER</code> method which takes a string as an input argument.  This input string is the text from which you want to extract the named entities.  The result is an indexed sequence of <code>LabeledToken</code> objects which contain a token field and a label field.  The token fields contain the tokens in the input string and the label fields contain the named entities that the tokens have been assigned to.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">classifier</span><span class="k">=new</span> <span class="nc">ApplyModel</span><span class="o">(</span><span class="s">&quot;my/pretrained/model.ser.gz&quot;</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="n">results</span><span class="k">=</span><span class="n">classifier</span><span class="o">.</span><span class="n">runNER</span><span class="o">(</span><span class="s">&quot;Find named entities in this new sentence.&quot;</span><span class="o">)</span>
+</pre></div>
+
+
+<h3>Performing Cross-Validation on an NER Model</h3>
+<p>To perform cross-validation we use the CrossValidation class which takes the number of folds and training data location as constructors.  Then we call the <code>runCrossValidation</code> method with an input parameter that is the location of the directory where the training and validation sets will be written.  The result is a vector whose elements correspond to the number of folds.  Each element is a map whose keys represent the unique entity types in that fold and values represent the precision, recall and F1-score of the corresponding entity type.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">testInstance</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">CrossValidation</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="s">&quot;location/of/training/data.txt&quot;</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="n">xvalResults</span><span class="k">=</span><span class="n">classifier</span><span class="o">.</span><span class="n">runCrossValidation</span><span class="o">(</span><span class="s">&quot;directory/to/write/xvalidation/data/&quot;</span><span class="o">)</span>
+</pre></div>
+
+
+<p>Next let's look at a real-world example.</p>
+<h2>Example: Identifying Protein Names</h2>
+<p>Suppose that you wanted to train an NER model to identify protein named in bio-medical literature.  We will use the BioNLP dataset that has already been transformed into the correct Stanford NER format which can be found in the <a href="https://github.com/alexminnaar/ScalaNER/tree/master/data">ScalaNER github repo</a>.</p>
+<p>First let's try training an NER model with this data and running it on a sample string of text to determine if it contains any protein names.</p>
+<div class="highlight"><pre><span class="nc">NERModel</span><span class="o">.</span><span class="n">trainClassifier</span><span class="o">(</span><span class="s">&quot;data/bionlp.txt&quot;</span><span class="o">,</span> <span class="s">&quot;/bioNlpModel.ser.gz&quot;</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="n">classifier</span><span class="k">=new</span> <span class="nc">ApplyModel</span><span class="o">(</span><span class="s">&quot;/bioNlpModel.ser.gz&quot;</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="n">results</span><span class="k">=</span><span class="n">classifier</span><span class="o">.</span><span class="n">runNER</span><span class="o">(</span><span class="s">&quot;Leukotriene B4 stimulates c-fos and c-jun gene transcription and AP-1 binding activity in human monocytes.&quot;</span><span class="o">)</span>
+
+<span class="n">println</span><span class="o">(</span><span class="n">results</span><span class="o">)</span>
+</pre></div>
+
+
+<p>Which gives the following output</p>
+<p><code>Vector(LabeledToken(Leukotriene,O), LabeledToken(B4,O), LabeledToken(stimulates,O), LabeledToken(c-fos,protein), LabeledToken(and,O), LabeledToken(c-jun,protein), LabeledToken(gene,O), LabeledToken(transcription,O), LabeledToken(and,O), LabeledToken(AP-1,O), LabeledToken(binding,O), LabeledToken(activity,O), LabeledToken(in,O), LabeledToken(human,O), LabeledToken(monocytes,O), LabeledToken(.,O))</code></p>
+<p>As you can see, the trained model assigns the correct <em>protein</em> label to the tokens "c-fos" and "c-jun" and all other tokens are assigned the <em>O</em> label indicating that they are not named entities.</p>
+<p>Next, let's perform 5-fold cross-validation on the entire dataset to get a good idea of its generalized performance.  This can be done in the following code where we specify the folder "data/xval" to be location where the 5 training and validation sets will be written.</p>
+<div class="highlight"><pre><span class="k">val</span> <span class="n">cv</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">CrossValidation</span><span class="o">(</span><span class="mi">5</span><span class="o">,</span> <span class="s">&quot;data/bionlp.txt&quot;</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="n">testResults</span> <span class="k">=</span> <span class="n">cv</span><span class="o">.</span><span class="n">runCrossValidation</span><span class="o">(</span><span class="s">&quot;data/xval&quot;</span><span class="o">)</span>
+
+<span class="n">println</span><span class="o">(</span><span class="n">testResults</span><span class="o">)</span>
+</pre></div>
+
+
+<p>Which gives the following output</p>
+<p><code>Vector(Map(protein -&gt; Performance(0.680461329715061,0.9862340216322517,0.8052990766760337), O -&gt; Performance(0.999634483838964,0.9878479836941098,0.9937062846316554)), Map(O -&gt; Performance(0.9991162403826159,0.9858425237240318,0.9924350003872866), protein -&gt; Performance(0.5766871165644172,0.9567430025445293,0.7196172248803828)), Map(O -&gt; Performance(0.9986442092089483,0.9858183409260546,0.9921898273472612), protein -&gt; Performance(0.6125175808720112,0.9436619718309859,0.7428571428571428)), Map(O -&gt; Performance(0.9994266652767643,0.9878419452887538,0.9936005389019872), protein -&gt; Performance(0.6638176638176638,0.9769392033542977,0.7905004240882104)), Map(O -&gt; Performance(0.9988831168831169,0.9877484974572354,0.9932846036624738), protein -&gt; Performance(0.6261755485893417,0.9489311163895487,0.7544853635505192)))</code></p>
+<p>The above output shows the precision, recall and F1-scores for each entity type (in this case protein and O) and each of the 5 folds.  So the F1-scores associated with identifying <em>protein</em> named entities are 0.8052, 0.7196, 0.7428, 0.7905, and 0.7544 for an average F1-score of 0.7625.</p>
+<h2>References</h2>
+<ul>
+<li><a href="http://nlp.stanford.edu/software/CRF-NER.shtml">Stanford Named Entity Recognizer</a></li>
+<li><a href="https://github.com/alexminnaar/ScalaNER">ScalaNER Github Repo</a></li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
         
         
 
@@ -661,305 +974,6 @@ Topic 5: disparity, binding, similarity, protein, structural, clause, instructio
     (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
 }
 </script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/time-series-classification-and-clustering-with-python.html">Time Series Classification and Clustering with Python</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-04-16T00:00:00+02:00">
-          on&nbsp;Wed 16 April 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
-</div><!-- /.post-info --><p>I recently ran into a problem at work where I had to predict whether an account would churn  in the near future given the account's time series usage in a certain time interval.  So this is a binary-valued classification problem (i.e. churn or not churn) with a time series as a predictor.  This was not a very straight-forward problem to tackle because it seemed like there two possible strategies to employ.</p>
-<ol>
-<li>Extract features from the time series like its mean, maximum, minimum, and other differential features.  Then use well-known classification algorithms (Naive Bayes, SVMs, etc.) with these features to make a prediction.</li>
-<li>Use a k-NN approach.  For a given time series example that you want to predict, find the most similar time series in the training set and use its corresponding output as the prediction.</li>
-</ol>
-<p>I tried both of these strategies and the latter produced the best results.  However this approach is not as simple as it may seem.  This is because finding a good similarity measure between time series is a very non-trivial task.</p>
-<h2>Finding a Similarity Measure</h2>
-<p>A naive choice for a similarity measure would be Euclidean distance.  The following example will show why this choice is not optimal.  Consider the following of 3 time series.</p>
-<p><img alt="alt text" src="images/3_ts.png" title="time series examples" /> </p>
-<p>In the above example, it is clear that <span class="math">\(ts1\)</span> and <span class="math">\(ts2\)</span> are most similar (they are both sin functions under different transformations). <span class="math">\(ts3\)</span> is clearly the most different. Let's compute the Euclidean distance <span class="math">\(d(ts1,ts2)\)</span> and <span class="math">\(d(ts1,ts3)\)</span> to see if the Euclidean distance measure agrees with what our intuition tells us. Let's first create a function that computes the Euclidean distance between two time series using</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">euclid_dist</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span><span class="n">t2</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">((</span><span class="n">t1</span><span class="o">-</span><span class="n">t2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
-</pre></div>
-
-
-<p>It turns out that <span class="math">\(d(ts1,ts2)=26.9\)</span> and <span class="math">\(d(ts1,ts3)=23.2\)</span>. This is not good because according to the Euclidean distance measure, <span class="math">\(ts1\)</span> is more similar to <span class="math">\(ts3\)</span> than to <span class="math">\(ts2\)</span> which contradicts our intuition. This is the problem with using the Euclidean distance measure. It often produced pessimistic similarity measures when it encounters distortion in the time axis. The way to deal with this is to use dynamic time warping.</p>
-<h3>Dynamic Time Warping</h3>
-<p>Dynamic time warping finds the optimal non-linear alignment between two time series. The Euclidean distances between alignments are then much less susceptible to pessimistic similarity measurements due to distortion in the time axis. There is a price to pay for this, however, because dynamic time warping is quadratic in the length of the time series used.</p>
-<p>Dynamic time warping works in the following way. Consider two time series <span class="math">\(Q\)</span> and <span class="math">\(C\)</span> of the same length <span class="math">\(n\)</span> where <span class="math">\(Q=q_1,q_2,...,q_n\)</span> and <span class="math">\(C=c_1,c_2,...,c_n\)</span> The first thing we do is construct an <span class="math">\(n\times n\)</span> matrix whose <span class="math">\(i,j^{th}\)</span> element is the Euclidean distance between <span class="math">\(q_i\)</span> and <span class="math">\(c_j\)</span>. We want to find a path through this matrix that minimizes the cumulative distance. This path then determines the optimal alignment between the two time series. It should be noted that it is possible for one point in a time series to be mapped to multiple points in the other time series.</p>
-<p>Let's call the path <span class="math">\(W\)</span> where <span class="math">\(W=w_1,w_2,...,w_K\)</span> where each element of <span class="math">\(W\)</span> represents the distance between a point <span class="math">\(i\)</span> in <span class="math">\(Q\)</span> and a point <span class="math">\(j\)</span> in <span class="math">\(C\)</span> i.e. <span class="math">\(w_k=(q_i-c_j)^2\)</span></p>
-<p>So we want to find the path with the minimum Euclidean distance <span class="math">\(W^*=argmin_W(\sqrt{\sum_{k=1}^Kw_k})\)</span> The optimal path is found via dynamic programming, specifically the following recursive function. <span class="math">\(\gamma(i,j)=d(q_i,c_j)+min ( \gamma(i-1,j-1),\gamma(i-1,j),\gamma(i,j-1))\)</span>. This can be implemented via the following python function.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">DTWDistance</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">):</span>
-    <span class="n">DTW</span><span class="o">=</span><span class="p">{}</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
-        <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-    <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
-            <span class="n">dist</span><span class="o">=</span> <span class="p">(</span><span class="n">s1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="n">s2</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span>
-            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dist</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">)],</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)],</span> <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)])</span>
-
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">DTW</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-</pre></div>
-
-
-<p>The dynamic time warping Euclidean distances between the time series are <span class="math">\(DTWDistance(ts1,ts2)=17.9\)</span> and <span class="math">\(DTWDistance(ts1,ts3)=21.5\)</span>. As you can see, our results have changed from when we only used the Euclidean distance measure. Now, in agreement with our intuition, <span class="math">\(ts2\)</span> is shown to be more similar to <span class="math">\(ts1\)</span> than <span class="math">\(ts3\)</span> is.</p>
-<h3>Speeding Up Dynamic Time Warping</h3>
-<p>Dynamic time warping has a complexity of <span class="math">\(O(nm)\)</span> where <span class="math">\(n\)</span> is the length of the first time series and <span class="math">\(m\)</span> is the length of the second time series. If you are performing dynamic time warping multiple times on long time series data, this can be prohibitively expensive. However, there are a couple of ways to speed things up. The first is to enforce a locality constraint. This works under the assumption that it is unlikely for <span class="math">\(q_i\)</span> and <span class="math">\(c_j\)</span> to be matched if <span class="math">\(i\)</span> and <span class="math">\(j\)</span> are too far apart. The threshold is determined by a window size <span class="math">\(w\)</span>. This way, only mappings within this window are considered which speeds up the inner loop. The following is the modified code which includes the window size <span class="math">\(w\)</span>.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">DTWDistance</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
-    <span class="n">DTW</span><span class="o">=</span><span class="p">{}</span>
-
-    <span class="n">w</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)))</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
-            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-    <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">i</span><span class="o">-</span><span class="n">w</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">),</span> <span class="n">i</span><span class="o">+</span><span class="n">w</span><span class="p">)):</span>
-            <span class="n">dist</span><span class="o">=</span> <span class="p">(</span><span class="n">s1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="n">s2</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span>
-            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dist</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">)],</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)],</span> <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)])</span>
-
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">DTW</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-</pre></div>
-
-
-<p>Another way to speed things up is to use the LB Keogh lower bound of dynamic time warping. It is defined as </p>
-<p><span class="math">\(LBKeogh(Q,C)=\sum_{i=1}^n (c_i-U_i)^2I(c_i &gt; U_i)+(c_i-L_i)^2I(c_i &lt; L_i)\)</span> </p>
-<p>where <span class="math">\(U_i\)</span> and <span class="math">\(L_i\)</span> are upper and lower bounds for time series <span class="math">\(Q\)</span> which are defined as <span class="math">\(U_i=max(q_{i-r}:q_{i+r})\)</span> and <span class="math">\(L_i=min(q_{i-r}:q_{i+r})\)</span> for a reach <span class="math">\(r\)</span> and <span class="math">\(I(\cdot)\)</span> is the indicator function. It can be implemented with the following function.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">LB_Keogh</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span><span class="n">s2</span><span class="p">,</span><span class="n">r</span><span class="p">):</span>
-    <span class="n">LB_sum</span><span class="o">=</span><span class="mi">0</span>
-    <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">s1</span><span class="p">):</span>
-
-        <span class="n">lower_bound</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">s2</span><span class="p">[(</span><span class="n">ind</span><span class="o">-</span><span class="n">r</span> <span class="k">if</span> <span class="n">ind</span><span class="o">-</span><span class="n">r</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):(</span><span class="n">ind</span><span class="o">+</span><span class="n">r</span><span class="p">)])</span>
-        <span class="n">upper_bound</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">s2</span><span class="p">[(</span><span class="n">ind</span><span class="o">-</span><span class="n">r</span> <span class="k">if</span> <span class="n">ind</span><span class="o">-</span><span class="n">r</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):(</span><span class="n">ind</span><span class="o">+</span><span class="n">r</span><span class="p">)])</span>
-
-        <span class="k">if</span> <span class="n">i</span><span class="o">&gt;</span><span class="n">upper_bound</span><span class="p">:</span>
-            <span class="n">LB_sum</span><span class="o">=</span><span class="n">LB_sum</span><span class="o">+</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="n">upper_bound</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
-        <span class="k">elif</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">lower_bound</span><span class="p">:</span>
-            <span class="n">LB_sum</span><span class="o">=</span><span class="n">LB_sum</span><span class="o">+</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="n">lower_bound</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
-
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">LB_sum</span><span class="p">)</span>
-</pre></div>
-
-
-<p>The LB Keogh lower bound method is linear whereas dynamic time warping is quadratic in complexity which make it very advantageous for searching over large sets of time series.</p>
-<h2>Classification and Clustering</h2>
-<p>Now that we have a reliable method to determine the similarity between two time series, we can use the k-NN algorithm for classification. Empirically, the best results have come when <span class="math">\(k=1\)</span>. The following is the 1-NN algorithm that uses dynamic time warping Euclidean distance. In this algorithm, <span class="math">\(train\)</span> is the training set of time series examples where the class that the time series belongs to is appended to the end of the time series. <span class="math">\(test\)</span> is the test set whose corresponding classes you are trying to predict. In this algorithm, for every time series in the test set, a search must be performed through all points in the training set so that the most similar point is found. Given that dynamic time warping is quadratic, this can be very computationally expensive. We can speed up classification using the LB Keogh lower bound. Computing LB Keogh is much less expensive than performing dynamic time warping. And since <span class="math">\(LB Keogh(Q,C) \leq DTW(Q,C)\)</span> , we can eliminate time series that cannot possibly be more similar that the current most similar time series. In this way we are eliminating many unnecessary dynamic time warping computations.</p>
-<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">classification_report</span>
-
-<span class="k">def</span> <span class="nf">knn</span><span class="p">(</span><span class="n">train</span><span class="p">,</span><span class="n">test</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
-    <span class="n">preds</span><span class="o">=</span><span class="p">[]</span>
-    <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">test</span><span class="p">):</span>
-        <span class="n">min_dist</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-        <span class="n">closest_seq</span><span class="o">=</span><span class="p">[]</span>
-        <span class="c">#print ind</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">train</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">LB_Keogh</span><span class="p">(</span><span class="n">i</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">j</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                <span class="n">dist</span><span class="o">=</span><span class="n">DTWDistance</span><span class="p">(</span><span class="n">i</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">j</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">w</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">dist</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                    <span class="n">min_dist</span><span class="o">=</span><span class="n">dist</span>
-                    <span class="n">closest_seq</span><span class="o">=</span><span class="n">j</span>
-        <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">closest_seq</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-    <span class="k">return</span> <span class="n">classification_report</span><span class="p">(</span><span class="n">test</span><span class="p">[:,</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">preds</span><span class="p">)</span>
-</pre></div>
-
-
-<p>Now let's test it on some data. We will use a window size of 4. Although the code is sped up with the use of the LB Keogh bound and the dynamic time warping locality constraint, it may still take a few minutes to run.</p>
-<div class="highlight"><pre><span class="n">train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/train.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/test.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="k">print</span> <span class="n">knn</span><span class="p">(</span><span class="n">train</span><span class="p">,</span><span class="n">test</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-</pre></div>
-
-
-<p>The result is</p>
-<p><img alt="alt text" src="images/perfromance.jpg" title="performance" /> </p>
-<p>The same idea can also be applied to k-means clustering. In this algorithm, the number of clusters is set apriori and similar time series are clustered together.</p>
-<div class="highlight"><pre><span class="kn">import</span> <span class="nn">random</span>
-
-<span class="k">def</span> <span class="nf">k_means_clust</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">num_clust</span><span class="p">,</span><span class="n">num_iter</span><span class="p">,</span><span class="n">w</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
-    <span class="n">centroids</span><span class="o">=</span><span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">num_clust</span><span class="p">)</span>
-    <span class="n">counter</span><span class="o">=</span><span class="mi">0</span>
-    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_iter</span><span class="p">):</span>
-        <span class="n">counter</span><span class="o">+=</span><span class="mi">1</span>
-        <span class="k">print</span> <span class="n">counter</span>
-        <span class="n">assignments</span><span class="o">=</span><span class="p">{}</span>
-        <span class="c">#assign data points to clusters</span>
-        <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-            <span class="n">min_dist</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-            <span class="n">closest_clust</span><span class="o">=</span><span class="bp">None</span>
-            <span class="k">for</span> <span class="n">c_ind</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">centroids</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">LB_Keogh</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                    <span class="n">cur_dist</span><span class="o">=</span><span class="n">DTWDistance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">w</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">cur_dist</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                        <span class="n">min_dist</span><span class="o">=</span><span class="n">cur_dist</span>
-                        <span class="n">closest_clust</span><span class="o">=</span><span class="n">c_ind</span>
-            <span class="k">if</span> <span class="n">closest_clust</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
-                <span class="n">assignments</span><span class="p">[</span><span class="n">closest_clust</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ind</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">assignments</span><span class="p">[</span><span class="n">closest_clust</span><span class="p">]</span><span class="o">=</span><span class="p">[]</span>
-
-        <span class="c">#recalculate centroids of clusters</span>
-        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
-            <span class="n">clust_sum</span><span class="o">=</span><span class="mi">0</span>
-            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
-                <span class="n">clust_sum</span><span class="o">=</span><span class="n">clust_sum</span><span class="o">+</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
-            <span class="n">centroids</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">=</span><span class="p">[</span><span class="n">m</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">assignments</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">clust_sum</span><span class="p">]</span>
-
-    <span class="k">return</span> <span class="n">centroids</span>
-</pre></div>
-
-
-<p>Let's test it on the entire data set (i.e. the training set and the test set stacked together).</p>
-<div class="highlight"><pre><span class="n">train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/train.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/test.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">train</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">test</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
-
-<span class="kn">import</span> <span class="nn">matplotlib.pylab</span> <span class="kn">as</span> <span class="nn">plt</span>
-
-<span class="n">centroids</span><span class="o">=</span><span class="n">k_means_clust</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">10</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">centroids</span><span class="p">:</span>
-
-    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-
-<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</pre></div>
-
-
-<p><img alt="alt text" src="images/cluster.png" title="cluster" /> </p>
-<h3>Code</h3>
-<p>The code used in this blog post can be found in <a href="https://github.com/alexminnaar/time-series-classification-and-clustering">my gitHub repo</a>.</p>
-<h3>References</h3>
-<p>The vast majority of research in this area is done by Dr. Eamonn Keogh's group at UC Riverside.  All of the relevant papers are referenced in <a href="http://www.cs.ucr.edu/~eamonn/time_series_data/">the group's webpage</a>.</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/my-experience-with-churn-analysis.html">My Experience with Churn Analysis</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-03-30T00:00:00+01:00">
-          on&nbsp;Sun 30 March 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
-</div><!-- /.post-info --><p>A large chunk of my time at my last job was devoted to churn analysis and I wanted to use this blog entry to explain how I approached the various problems that it presented.  This is not meant to be a very technical post and the reasoning behind this is two-fold</p>
-<ol>
-<li>Obviously I do not have permission to use any company data and there is not really any good publicly-available churn datasets on the web.  Presenting technical code without data to run it on would not really make sense.</li>
-<li>I have learned that churn analysis is very domain-specific and I want to make sure that what I say generalizes to many use-cases.</li>
-</ol>
-<p>Before I explain what I did, I should first define what churn is and the specific goals that I had in mind.</p>
-<h2>What is Churn?</h2>
-<p>Churn is a term that generally describes the process where customers stop using the products and/or services provided by a business.  However, it is of most interest in subscription-based services like phone plans, video games, etc.  In these services it is easy to know when a customer has churned i.e. when they cancel their subscription.  Needless to say, churn is bad for business.  Every company has a customer CPA (Cost Per Acquisition) so in order to replace a churned customer with a new customer, this cost must be paid.   Clearly it is cheaper for companies to keep customers than to replace them.  Churn analysis is used to attempt to answer the following questions</p>
-<ol>
-<li>Why are customers churning?</li>
-<li>Can we predict customers who will churn in the near future (and then maybe convince them to stay with us)?</li>
-<li>How long can we expect a given customer to stay with us?</li>
-</ol>
-<p>These are very important questions and if reliable answers can be obtained, they would be of great value.  We will also see that these main questions are closely linked to some other slightly different yet equally important questions such as</p>
-<ol>
-<li>What is the lifetime value of a given customer?</li>
-<li>Who are our most valuable customers and who are out least valuable customers? What accounts for these differences?</li>
-</ol>
-<h2>Question:  Can we predict which customers will churn in the near future?</h2>
-<p>Predicting which of your current customers will churn is a binary classification problem.  As it stands, this is an ill-defined problem.  This is because of the simple fact that in subscription-based services ALL CUSTOMERS WILL CANCEL EVENTUALLY!  You could have a classifier that predicts that all currently active accounts will cancel and it would be 100% correct!  But obviously this would be useless to a company.  What companies really want to know is which of the currently active accounts will cancel "soon".  This way companies can take action in an effort to prevent cancellation from occurring.  The specific preventative action that should be taken is beyond the scope of this blog post but the prediction problem itself will be explored.</p>
-<h3>Dealing with the Time Component</h3>
-<p>The first thing that you need to do is define a time period.  There is a trade-off here.  You want to know who is going to cancel as soon as possible so that you have the maximum amount of time to take preventative action. However if you predict too early, your predictions will be of lower quality.  This is because (in most cases) churn indicators become clearer the closer the customer is to his/her actual cancel date.  On the other hand, if you predict too late, your predictions will be more reliable but it will give you less time to take preventative action.  You need to decide on a good balance which most likely depends on your domain.  I can say that in the telecom domain a 2 week window is generally enough time to perform preventative action.</p>
-<p>Once you have dealt with the time component, the classification problem becomes more well-defined however there is still a bit more work that needs to be done.</p>
-<h3>Defining Positive and Negative Examples</h3>
-<p>In any classification problem you need to build a training set of positive and negative examples.  It is clear that negative examples will come from customers that have churned in the past.  However it is a bit unclear what the positive examples should be.  You might initially think that we can use the currently active accounts as positive examples.  This is problematic sinse ultimately these are the accounts we will test on so we can't really use them for training as they are.</p>
-<p>What you need to do is identify your long-time customers (they will most likely be currently active, but they could also have cancelled after using your service for a long time).  However, as previously stated, you cannot use them as they are because you are going to test on them.  You need to use the truncated versions of these examples as positive examples.  For example, if you have a long-time customer that has been active for two years, use this customer's behaviour from their first 365 days as a positive example.  In this way, you obtain positive examples of customers that you know will not cancel for a long time.  Also, testing will generally be done on an active customer's recent behaviour, so you are mitigating the risk of overfitting by training on that customer's past behaviour.</p>
-<p>Now that you know what your positive and negative examples are you must extract relevant feature from them.</p>
-<h3>Feature Extraction</h3>
-<p>The feature extraction process is the most important part of this problem and, unfortunately, also the most unsystematic.  If you have dealt with supervised learning problems before you know that feature extraction is as much an art as it is a science.  Feature extraction is very domain-specific.  In some cases the relevant features that indicate churn likelihood are obvious, in others it is less clear.  It would be wise to consult someone with good domain expertise before you decide on the features you will use.  I will list some of the features that I found to be good indicators of churn in the telecom domain.</p>
-<h4>Static Features</h4>
-<p>Static features are features that are not time-dependent.</p>
-<ul>
-<li>Age at activation date</li>
-<li>Lead source</li>
-<li>Type of phone</li>
-<li>Number of phones attached to account</li>
-<li>Location</li>
-<li>Credit card type</li>
-</ul>
-<h4>Usage-based Features</h4>
-<p>Usage-based features deal with the customer's time-dependent usage patterns.</p>
-<ul>
-<li>Date of last usage</li>
-<li>Max and min daily usage amount</li>
-<li>Average usage amount over last 30 days</li>
-<li>Average usage amount over last 30 days / overall average</li>
-<li>Number of support tickets issued</li>
-<li>Number support tickets in last 30 days / total # of support tickets</li>
-<li>Max # of days without any usage</li>
-<li>Current # of days without any usage / max # days without any usage</li>
-</ul>
-<p>However, as I said earlier, feature extraction is a very domain-specific problem so there is no guarantee that these features will be useful in your particular use case.</p>
-<h3>The Class Imbalance Problem</h3>
-<p>In almost all applications of this problem you will find that you have many more active accounts than cancelled accounts.  Therefore you will have many more positive training examples than negative training examples.  This is problematic because any classifier that predicts that no customers will churn will perform very well.  Consider the case where you apply the classifier to a set of 100 accounts - 90 that will not cancel in the next 2 weeks and 10 that will.  If the classifier predicts that all 100 will not cancel, it would have an accuracy of 90%.  Even though the classifier is very accurate, it is of little use because we need to identify these 10 accounts that are going to cancel.  This is called the class imbalance problem.</p>
-<p>There has been a fair amount of research into this problem and survey of possible solutions can be found <a href="http://marmota.dlsi.uji.es/WebBIB/papers/2007/1_GarciaTamida2007.pdf">here</a>.  I have found that over-sampling the negative examples works well.  Specifically, I used stratified sampling on the negative examples such that my final training set contains a certain percentage of negative examples.  There is another trade-off here.  The higher the percentage of negative examples, the more false negatives (incorrectly predicting that a customer will churn) you will generate.  But if the percentage is too low, you will miss accounts that will cancel.  You must decide the threshold of false negatives that you can tolerate.</p>
-<h3>Putting it All Together</h3>
-<p>Now that you have defined your positive and negative examples, extracted features and dealt with the class imbalance problem, you can finally build your model.  The particular model that you choose is up to you.  I have found that random forests perform well in most applications.  The best results generally come from an ensemble of multiple models.  Obviously you would want to perform the usual train/test set splitting, cross-validation and parameter tuning that is required to reduce overfitting.  Once your model is trained up to your standards, you will apply it to your set of currently active customers.</p>
-<p>You also want to decide how often to run this classifier.  Since the usage-based features are constantly changing, running the classifier frequently would be a good idea.  However, if you notice that no new accounts are being flagged, it might be a good idea to run it less frequently.  But if you have the capacity, there is really no downside to running it as often as possible.</p>
                     </article>
  
 <div class="paginator">

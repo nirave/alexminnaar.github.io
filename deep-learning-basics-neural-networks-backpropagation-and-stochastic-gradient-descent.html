@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
                 <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
                 <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
                 <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
@@ -78,8 +79,8 @@ Machine Learning at University College London. Natural language processing at Ve
         <li class="vcard author">
                  by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
         </li>
-        <li class="published" title="2015-10-14T00:00:00+02:00">
-          on&nbsp;Wed 14 October 2015
+        <li class="published" title="2015-01-14T00:00:00+01:00">
+          on&nbsp;Wed 14 January 2015
         </li>
 
 	</ul>
@@ -199,6 +200,11 @@ Machine Learning at University College London. Natural language processing at Ve
 <p>This process is known as <strong>backpropagation</strong> because we begin with the final output error <span class="math">\(y_j-t_j\)</span> for the output neuron <span class="math">\(j\)</span> and this error gets propagated backwards throughout the network in order to update the weights.</p>
 <h1>Wrapping Everything Up</h1>
 <p>In this blog post we started with the simple single neuron model and we learned the model weights by computing the gradient of the objective function and using it in the stochastic gradient descent update equation.  Then we moved on to the slightly more complicated neural network model.  In this case we computed the required gradients using a procedure known as backpropagation and we again used these gradients in the SGD update equations.  True <em>Deep Learning</em> models either contain many more hidden layers or neurons in different configurations but they still adhere to the basic principles described here.  Hopefully this post has made <em>Deep Learning</em> seem like a more understandable and less daunting field of machine learning.</p>
+<h1>References</h1>
+<ul>
+<li><a href="https://www.coursera.org/course/neuralnets">Neural Networks for Machine Learning</a> Coursera course from Geoffrey Hinton.</li>
+<li><a href="http://deeplearning.stanford.edu/tutorial/">Deep Learning Tutorial</a> from Stanford.</li>
+</ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');
     mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';

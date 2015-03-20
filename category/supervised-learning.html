@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
                 <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
                 <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
                 <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
@@ -69,14 +70,76 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
+                        <h1 class="entry-title"><a href="/word2vec-tutorial-the-skip-gram-and-continuous-bag-of-words-model.html">Word2Vec Tutorial: The Skip-Gram and Continuous Bag-of-Words Model</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-03-01T00:00:00+01:00">
+          on&nbsp;Sun 01 March 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+</div><!-- /.post-info --><p>In natural language processing, there are many ways in which a word can be described - eg. its part-of-speech tag, its syntactic dependencies, the shape of the word itself, its frequency in a corpus, etc.  These descriptions are then often used as features in many NLP tasks such as named entity recognition, sentiment analysis, and dependency parsing to name a few.  <em>Word2Vec</em> is a class of neural network models that produces real-valued vector representations of words which can then be used as features for the previously mentioned NLP tasks.  They are also often used an inputs for various <em>Deep Learning</em> models.  The values of the vectors' elements do not have any intuitive meaning, however they do possess some properties that suggest that they capture semantic information about the word.  For instance, words that humans consider to be semantically similar turn out to have similar corresponding vectors (in terms of cosine similarity).  Another huge advantage of these <em>Word2Vec</em> models is that they do not require any annotated training data - they simply learn these word vector representations from large amounts of raw text data.</p>
+<p>In this blog post I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model.  Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
+<h1>The Skip-Gram Model</h1>
+<p>Before we define the <em>skip-gram</em> neural network model, it would be instructive to understand the training data that it accepts.  The input of the <em>skip-gram</em> model is a single word <span class="math">\(w_I\)</span> and the output is the words in <span class="math">\(w_I\)</span>'s context <span class="math">\(\{w_{O,1},...,w_{O,C}\}\)</span> defined by a word window <span class="math">\(C\)</span>.  For example, consider the sentence "I drove my car to the store".  A potential taining instance could be the word "car" as an input and the words {"I","drove","my","to","the","store"} as outputs.  All of these words are <em>one-hot</em> encoded meaning they are vectors of length <span class="math">\(V\)</span> (the size of the vocabulary) with a value of 1 at the index corresponding to the word and zeros in all other indexes.  As you can see, we are essentially <em>creating</em> training examples from plain text which means that we can have a virtually unlimited number of training examples at our disposal.</p>
+<p>Now let's define the <em>skip-gram</em> model as follows.</p>
+<p><img alt="skip-gram model" src="images/skip-gram.png" /> </p>
+<p>In the above model <span class="math">\(\mathbf{x}\)</span> represents the <em>one-hot</em> encoded vector of the input word in the training instance and <span class="math">\(\{\mathbf{y_1},...\mathbf{y_C}\}\)</span> are the <em>one-hot</em> encoded vectors of the output words in the training instance.  The <span class="math">\(V \times N\)</span> matrix <span class="math">\(\mathbf{W}\)</span> is the weight matrix between the input layer and hidden layer whose <span class="math">\(i^{th}\)</span> row represents the weights corresponding to the <span class="math">\(i^{th}\)</span> word in the vocabulary. This weight matrix <span class="math">\(\mathbf{W}\)</span> is what we are interested in learning because it contains the vector encodings of all of the words in our vocabulary (as its rows).  Each output word vector also has an associated <span class="math">\(N \times V\)</span> output matrix <span class="math">\(\mathbf{W'}\)</span>. There is also a hidden layer which consists of an <span class="math">\(N\)</span> dimensional vector <span class="math">\(\mathbf{h}\)</span>.</p>
+<p>From my <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">previous blog post</a>, we know that the input to a unit in the hidden layer <span class="math">\(h_i\)</span> is simply the weighted sum of its inputs.  Since the input vector <span class="math">\(\mathbf{x}\)</span> is <em>one-hot</em> encoded, the weights coming from the nonzero element will be the only ones contributing to the hidden layer.  Therefore, for the input <span class="math">\(\mathbf{x}\)</span> with <span class="math">\(x_k=1\)</span> and <span class="math">\(x_{k'}=0\)</span> for all <span class="math">\(k' \neq k\)</span> the outputs of the hidden layer will be equivalent to the <span class="math">\(k^{th}\)</span> row of <span class="math">\(\mathbf{W}\)</span>.  Or mathematically,</p>
+<p>
+<div class="math">$$\mathbf{h}=\mathbf{x}^T \mathbf{W}=\mathbf{W}_{(k, .)}$$</div>
+</p>
+<p>Notice that there is no activation function used here.  This is presumably because the inputs are bounded by the <em>one-hot</em> encoding.</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
                         <h1 class="entry-title"><a href="/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a></h1>
 <div class="post-info">
 	<ul>
         <li class="vcard author">
                  by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
         </li>
-        <li class="published" title="2015-10-14T00:00:00+02:00">
-          on&nbsp;Wed 14 October 2015
+        <li class="published" title="2015-01-14T00:00:00+01:00">
+          on&nbsp;Wed 14 January 2015
         </li>
 
 	</ul>
@@ -196,6 +259,11 @@ Machine Learning at University College London. Natural language processing at Ve
 <p>This process is known as <strong>backpropagation</strong> because we begin with the final output error <span class="math">\(y_j-t_j\)</span> for the output neuron <span class="math">\(j\)</span> and this error gets propagated backwards throughout the network in order to update the weights.</p>
 <h1>Wrapping Everything Up</h1>
 <p>In this blog post we started with the simple single neuron model and we learned the model weights by computing the gradient of the objective function and using it in the stochastic gradient descent update equation.  Then we moved on to the slightly more complicated neural network model.  In this case we computed the required gradients using a procedure known as backpropagation and we again used these gradients in the SGD update equations.  True <em>Deep Learning</em> models either contain many more hidden layers or neurons in different configurations but they still adhere to the basic principles described here.  Hopefully this post has made <em>Deep Learning</em> seem like a more understandable and less daunting field of machine learning.</p>
+<h1>References</h1>
+<ul>
+<li><a href="https://www.coursera.org/course/neuralnets">Neural Networks for Machine Learning</a> Coursera course from Geoffrey Hinton.</li>
+<li><a href="http://deeplearning.stanford.edu/tutorial/">Deep Learning Tutorial</a> from Stanford.</li>
+</ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');
     mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
