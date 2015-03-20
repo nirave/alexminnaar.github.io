@@ -70,224 +70,6 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
-                        <h1 class="entry-title"><a href="/time-series-classification-and-clustering-with-python.html">Time Series Classification and Clustering with Python</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-04-16T00:00:00+02:00">
-          on&nbsp;Wed 16 April 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
-</div><!-- /.post-info --><p>I recently ran into a problem at work where I had to predict whether an account would churn  in the near future given the account's time series usage in a certain time interval.  So this is a binary-valued classification problem (i.e. churn or not churn) with a time series as a predictor.  This was not a very straight-forward problem to tackle because it seemed like there two possible strategies to employ.</p>
-<ol>
-<li>Extract features from the time series like its mean, maximum, minimum, and other differential features.  Then use well-known classification algorithms (Naive Bayes, SVMs, etc.) with these features to make a prediction.</li>
-<li>Use a k-NN approach.  For a given time series example that you want to predict, find the most similar time series in the training set and use its corresponding output as the prediction.</li>
-</ol>
-<p>I tried both of these strategies and the latter produced the best results.  However this approach is not as simple as it may seem.  This is because finding a good similarity measure between time series is a very non-trivial task.</p>
-<h2>Finding a Similarity Measure</h2>
-<p>A naive choice for a similarity measure would be Euclidean distance.  The following example will show why this choice is not optimal.  Consider the following of 3 time series.</p>
-<p><img alt="alt text" src="images/3_ts.png" title="time series examples" /> </p>
-<p>In the above example, it is clear that <span class="math">\(ts1\)</span> and <span class="math">\(ts2\)</span> are most similar (they are both sin functions under different transformations). <span class="math">\(ts3\)</span> is clearly the most different. Let's compute the Euclidean distance <span class="math">\(d(ts1,ts2)\)</span> and <span class="math">\(d(ts1,ts3)\)</span> to see if the Euclidean distance measure agrees with what our intuition tells us. Let's first create a function that computes the Euclidean distance between two time series using</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">euclid_dist</span><span class="p">(</span><span class="n">t1</span><span class="p">,</span><span class="n">t2</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">((</span><span class="n">t1</span><span class="o">-</span><span class="n">t2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
-</pre></div>
-
-
-<p>It turns out that <span class="math">\(d(ts1,ts2)=26.9\)</span> and <span class="math">\(d(ts1,ts3)=23.2\)</span>. This is not good because according to the Euclidean distance measure, <span class="math">\(ts1\)</span> is more similar to <span class="math">\(ts3\)</span> than to <span class="math">\(ts2\)</span> which contradicts our intuition. This is the problem with using the Euclidean distance measure. It often produced pessimistic similarity measures when it encounters distortion in the time axis. The way to deal with this is to use dynamic time warping.</p>
-<h3>Dynamic Time Warping</h3>
-<p>Dynamic time warping finds the optimal non-linear alignment between two time series. The Euclidean distances between alignments are then much less susceptible to pessimistic similarity measurements due to distortion in the time axis. There is a price to pay for this, however, because dynamic time warping is quadratic in the length of the time series used.</p>
-<p>Dynamic time warping works in the following way. Consider two time series <span class="math">\(Q\)</span> and <span class="math">\(C\)</span> of the same length <span class="math">\(n\)</span> where <span class="math">\(Q=q_1,q_2,...,q_n\)</span> and <span class="math">\(C=c_1,c_2,...,c_n\)</span> The first thing we do is construct an <span class="math">\(n\times n\)</span> matrix whose <span class="math">\(i,j^{th}\)</span> element is the Euclidean distance between <span class="math">\(q_i\)</span> and <span class="math">\(c_j\)</span>. We want to find a path through this matrix that minimizes the cumulative distance. This path then determines the optimal alignment between the two time series. It should be noted that it is possible for one point in a time series to be mapped to multiple points in the other time series.</p>
-<p>Let's call the path <span class="math">\(W\)</span> where <span class="math">\(W=w_1,w_2,...,w_K\)</span> where each element of <span class="math">\(W\)</span> represents the distance between a point <span class="math">\(i\)</span> in <span class="math">\(Q\)</span> and a point <span class="math">\(j\)</span> in <span class="math">\(C\)</span> i.e. <span class="math">\(w_k=(q_i-c_j)^2\)</span></p>
-<p>So we want to find the path with the minimum Euclidean distance <span class="math">\(W^*=argmin_W(\sqrt{\sum_{k=1}^Kw_k})\)</span> The optimal path is found via dynamic programming, specifically the following recursive function. <span class="math">\(\gamma(i,j)=d(q_i,c_j)+min ( \gamma(i-1,j-1),\gamma(i-1,j),\gamma(i,j-1))\)</span>. This can be implemented via the following python function.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">DTWDistance</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">):</span>
-    <span class="n">DTW</span><span class="o">=</span><span class="p">{}</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
-        <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-    <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
-            <span class="n">dist</span><span class="o">=</span> <span class="p">(</span><span class="n">s1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="n">s2</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span>
-            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dist</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">)],</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)],</span> <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)])</span>
-
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">DTW</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-</pre></div>
-
-
-<p>The dynamic time warping Euclidean distances between the time series are <span class="math">\(DTWDistance(ts1,ts2)=17.9\)</span> and <span class="math">\(DTWDistance(ts1,ts3)=21.5\)</span>. As you can see, our results have changed from when we only used the Euclidean distance measure. Now, in agreement with our intuition, <span class="math">\(ts2\)</span> is shown to be more similar to <span class="math">\(ts1\)</span> than <span class="math">\(ts3\)</span> is.</p>
-<h3>Speeding Up Dynamic Time Warping</h3>
-<p>Dynamic time warping has a complexity of <span class="math">\(O(nm)\)</span> where <span class="math">\(n\)</span> is the length of the first time series and <span class="math">\(m\)</span> is the length of the second time series. If you are performing dynamic time warping multiple times on long time series data, this can be prohibitively expensive. However, there are a couple of ways to speed things up. The first is to enforce a locality constraint. This works under the assumption that it is unlikely for <span class="math">\(q_i\)</span> and <span class="math">\(c_j\)</span> to be matched if <span class="math">\(i\)</span> and <span class="math">\(j\)</span> are too far apart. The threshold is determined by a window size <span class="math">\(w\)</span>. This way, only mappings within this window are considered which speeds up the inner loop. The following is the modified code which includes the window size <span class="math">\(w\)</span>.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">DTWDistance</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
-    <span class="n">DTW</span><span class="o">=</span><span class="p">{}</span>
-
-    <span class="n">w</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)))</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)):</span>
-            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-    <span class="n">DTW</span><span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
-
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">i</span><span class="o">-</span><span class="n">w</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">),</span> <span class="n">i</span><span class="o">+</span><span class="n">w</span><span class="p">)):</span>
-            <span class="n">dist</span><span class="o">=</span> <span class="p">(</span><span class="n">s1</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="n">s2</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span>
-            <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dist</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">)],</span><span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)],</span> <span class="n">DTW</span><span class="p">[(</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="o">-</span><span class="mi">1</span><span class="p">)])</span>
-
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">DTW</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-</pre></div>
-
-
-<p>Another way to speed things up is to use the LB Keogh lower bound of dynamic time warping. It is defined as </p>
-<p><span class="math">\(LBKeogh(Q,C)=\sum_{i=1}^n (c_i-U_i)^2I(c_i &gt; U_i)+(c_i-L_i)^2I(c_i &lt; L_i)\)</span> </p>
-<p>where <span class="math">\(U_i\)</span> and <span class="math">\(L_i\)</span> are upper and lower bounds for time series <span class="math">\(Q\)</span> which are defined as <span class="math">\(U_i=max(q_{i-r}:q_{i+r})\)</span> and <span class="math">\(L_i=min(q_{i-r}:q_{i+r})\)</span> for a reach <span class="math">\(r\)</span> and <span class="math">\(I(\cdot)\)</span> is the indicator function. It can be implemented with the following function.</p>
-<div class="highlight"><pre><span class="k">def</span> <span class="nf">LB_Keogh</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span><span class="n">s2</span><span class="p">,</span><span class="n">r</span><span class="p">):</span>
-    <span class="n">LB_sum</span><span class="o">=</span><span class="mi">0</span>
-    <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">s1</span><span class="p">):</span>
-
-        <span class="n">lower_bound</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">s2</span><span class="p">[(</span><span class="n">ind</span><span class="o">-</span><span class="n">r</span> <span class="k">if</span> <span class="n">ind</span><span class="o">-</span><span class="n">r</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):(</span><span class="n">ind</span><span class="o">+</span><span class="n">r</span><span class="p">)])</span>
-        <span class="n">upper_bound</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="n">s2</span><span class="p">[(</span><span class="n">ind</span><span class="o">-</span><span class="n">r</span> <span class="k">if</span> <span class="n">ind</span><span class="o">-</span><span class="n">r</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">):(</span><span class="n">ind</span><span class="o">+</span><span class="n">r</span><span class="p">)])</span>
-
-        <span class="k">if</span> <span class="n">i</span><span class="o">&gt;</span><span class="n">upper_bound</span><span class="p">:</span>
-            <span class="n">LB_sum</span><span class="o">=</span><span class="n">LB_sum</span><span class="o">+</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="n">upper_bound</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
-        <span class="k">elif</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">lower_bound</span><span class="p">:</span>
-            <span class="n">LB_sum</span><span class="o">=</span><span class="n">LB_sum</span><span class="o">+</span><span class="p">(</span><span class="n">i</span><span class="o">-</span><span class="n">lower_bound</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
-
-    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">LB_sum</span><span class="p">)</span>
-</pre></div>
-
-
-<p>The LB Keogh lower bound method is linear whereas dynamic time warping is quadratic in complexity which make it very advantageous for searching over large sets of time series.</p>
-<h2>Classification and Clustering</h2>
-<p>Now that we have a reliable method to determine the similarity between two time series, we can use the k-NN algorithm for classification. Empirically, the best results have come when <span class="math">\(k=1\)</span>. The following is the 1-NN algorithm that uses dynamic time warping Euclidean distance. In this algorithm, <span class="math">\(train\)</span> is the training set of time series examples where the class that the time series belongs to is appended to the end of the time series. <span class="math">\(test\)</span> is the test set whose corresponding classes you are trying to predict. In this algorithm, for every time series in the test set, a search must be performed through all points in the training set so that the most similar point is found. Given that dynamic time warping is quadratic, this can be very computationally expensive. We can speed up classification using the LB Keogh lower bound. Computing LB Keogh is much less expensive than performing dynamic time warping. And since <span class="math">\(LB Keogh(Q,C) \leq DTW(Q,C)\)</span> , we can eliminate time series that cannot possibly be more similar that the current most similar time series. In this way we are eliminating many unnecessary dynamic time warping computations.</p>
-<div class="highlight"><pre><span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">classification_report</span>
-
-<span class="k">def</span> <span class="nf">knn</span><span class="p">(</span><span class="n">train</span><span class="p">,</span><span class="n">test</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
-    <span class="n">preds</span><span class="o">=</span><span class="p">[]</span>
-    <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">test</span><span class="p">):</span>
-        <span class="n">min_dist</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-        <span class="n">closest_seq</span><span class="o">=</span><span class="p">[]</span>
-        <span class="c">#print ind</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">train</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">LB_Keogh</span><span class="p">(</span><span class="n">i</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">j</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                <span class="n">dist</span><span class="o">=</span><span class="n">DTWDistance</span><span class="p">(</span><span class="n">i</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">j</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">w</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">dist</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                    <span class="n">min_dist</span><span class="o">=</span><span class="n">dist</span>
-                    <span class="n">closest_seq</span><span class="o">=</span><span class="n">j</span>
-        <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">closest_seq</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-    <span class="k">return</span> <span class="n">classification_report</span><span class="p">(</span><span class="n">test</span><span class="p">[:,</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">preds</span><span class="p">)</span>
-</pre></div>
-
-
-<p>Now let's test it on some data. We will use a window size of 4. Although the code is sped up with the use of the LB Keogh bound and the dynamic time warping locality constraint, it may still take a few minutes to run.</p>
-<div class="highlight"><pre><span class="n">train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/train.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/test.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="k">print</span> <span class="n">knn</span><span class="p">(</span><span class="n">train</span><span class="p">,</span><span class="n">test</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-</pre></div>
-
-
-<p>The result is</p>
-<p><img alt="alt text" src="images/perfromance.jpg" title="performance" /> </p>
-<p>The same idea can also be applied to k-means clustering. In this algorithm, the number of clusters is set apriori and similar time series are clustered together.</p>
-<div class="highlight"><pre><span class="kn">import</span> <span class="nn">random</span>
-
-<span class="k">def</span> <span class="nf">k_means_clust</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">num_clust</span><span class="p">,</span><span class="n">num_iter</span><span class="p">,</span><span class="n">w</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
-    <span class="n">centroids</span><span class="o">=</span><span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">num_clust</span><span class="p">)</span>
-    <span class="n">counter</span><span class="o">=</span><span class="mi">0</span>
-    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_iter</span><span class="p">):</span>
-        <span class="n">counter</span><span class="o">+=</span><span class="mi">1</span>
-        <span class="k">print</span> <span class="n">counter</span>
-        <span class="n">assignments</span><span class="o">=</span><span class="p">{}</span>
-        <span class="c">#assign data points to clusters</span>
-        <span class="k">for</span> <span class="n">ind</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-            <span class="n">min_dist</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
-            <span class="n">closest_clust</span><span class="o">=</span><span class="bp">None</span>
-            <span class="k">for</span> <span class="n">c_ind</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">centroids</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">LB_Keogh</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                    <span class="n">cur_dist</span><span class="o">=</span><span class="n">DTWDistance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">w</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">cur_dist</span><span class="o">&lt;</span><span class="n">min_dist</span><span class="p">:</span>
-                        <span class="n">min_dist</span><span class="o">=</span><span class="n">cur_dist</span>
-                        <span class="n">closest_clust</span><span class="o">=</span><span class="n">c_ind</span>
-            <span class="k">if</span> <span class="n">closest_clust</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
-                <span class="n">assignments</span><span class="p">[</span><span class="n">closest_clust</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ind</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">assignments</span><span class="p">[</span><span class="n">closest_clust</span><span class="p">]</span><span class="o">=</span><span class="p">[]</span>
-
-        <span class="c">#recalculate centroids of clusters</span>
-        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
-            <span class="n">clust_sum</span><span class="o">=</span><span class="mi">0</span>
-            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
-                <span class="n">clust_sum</span><span class="o">=</span><span class="n">clust_sum</span><span class="o">+</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
-            <span class="n">centroids</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">=</span><span class="p">[</span><span class="n">m</span><span class="o">/</span><span class="nb">len</span><span class="p">(</span><span class="n">assignments</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">clust_sum</span><span class="p">]</span>
-
-    <span class="k">return</span> <span class="n">centroids</span>
-</pre></div>
-
-
-<p>Let's test it on the entire data set (i.e. the training set and the test set stacked together).</p>
-<div class="highlight"><pre><span class="n">train</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/train.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="n">test</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">genfromtxt</span><span class="p">(</span><span class="s">&#39;datasets/test.csv&#39;</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
-<span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">train</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="n">test</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
-
-<span class="kn">import</span> <span class="nn">matplotlib.pylab</span> <span class="kn">as</span> <span class="nn">plt</span>
-
-<span class="n">centroids</span><span class="o">=</span><span class="n">k_means_clust</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">10</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">centroids</span><span class="p">:</span>
-
-    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-
-<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</pre></div>
-
-
-<p><img alt="alt text" src="images/cluster.png" title="cluster" /> </p>
-<h3>Code</h3>
-<p>The code used in this blog post can be found in <a href="https://github.com/alexminnaar/time-series-classification-and-clustering">my gitHub repo</a>.</p>
-<h3>References</h3>
-<p>The vast majority of research in this area is done by Dr. Eamonn Keogh's group at UC Riverside.  All of the relevant papers are referenced in <a href="http://www.cs.ucr.edu/~eamonn/time_series_data/">the group's webpage</a>.</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
                         <h1 class="entry-title"><a href="/my-experience-with-churn-analysis.html">My Experience with Churn Analysis</a></h1>
 <div class="post-info">
 	<ul>
@@ -846,6 +628,73 @@ This next snippet shows how the combinations are then counted.</p>
 <img alt="alt text" src="images/geodesic_body.png" title="Geodesic body" /></p>
 <p>There are several interesting differences with these plots.  The first is that the actual post word "geodesic" is not in the top ten most likely tags (it is probably not even in the set of possible tags).  Another difference is that the tag likelihoods are actually larger when "geodesic" appears in the post body.  This is probably because "geodesic" is a more obscure word than "C++" and "sql".</p>
 <p>The next step is to use these association rules to make predictions.  Stay tuned...</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-4.html">Facebook Recruiting III Keyword Extraction - Part 4</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-09-26T00:00:00+02:00">
+          on&nbsp;Thu 26 September 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Finding Association Rules</h2>
+<p>The idea is to develop rules that assign tags to certain words in the post titles and bodies.  For example,</p>
+<p><span class="math">\(eclpise\rightarrow java
+\\derivative \rightarrow calculus
+\\matplotlib \rightarrow python\)</span></p>
+<p>where the words on the left side of the arrow are words in the title/body and words on the right side of the arrow are tags. Once these rules are found, they can be applied to the post words in the test set and the tag word predictions can be found trivially. But first we must come up with a method to generate these rules. This can be done probabilistically using word counts from the training set.</p>
+<h3>Using probabilities to generate association rules</h3>
+<p>The question that needs to be answered is given that word A appears in a post, what is the probability that tag B will also appear in that post? To get this probability, you need to count the number of posts in which word A appears and the also the number of posts in which both word A and tag B appear.  The desired probability can then be calculated as</p>
+<p><span class="math">\(P(B|A)=\frac{|Co(A,B)|}{|A|}\)</span></p>
+<p>where <span class="math">\(|Co(A,B)|\)</span> is the number of posts where word A and tag B co-occur and <span class="math">\(|A|\)</span> is the number of posts where word A occurs.  So, if <span class="math">\(P(B|A)\)</span> is above a certain threshold, we can then generate the association rule <span class="math">\(A \rightarrow B\)</span>. However, this probability is only a point estimate and does not give us any information regarding how certain we are about the estimate.  For example, it is possible to have one case where <span class="math">\(|Co(A_1,B_1)|=9\)</span> and <span class="math">\(|A_1|=10\)</span> thus <span class="math">\(P(B_1|A_1)=90\%\)</span> and a second case where <span class="math">\(|Co(A_2,B_2)|=89\)</span> and <span class="math">\(|A_2|=100\)</span> thus <span class="math">\(P(B_2|A_2)=89\%\)</span>. And since <span class="math">\(P(B_1|A_1)&gt;P(B_2|A_2)\)</span>, you might think that <span class="math">\(A_1 \rightarrow B_1\)</span> is a stronger association rule than <span class="math">\(A_2 \rightarrow B_2\)</span>. However, it is very possible that this assumption is incorrect because we cannot be certain that <span class="math">\(P(B_1|A_1)\)</span> is the true probability because the sample size is so small. Whereas for <span class="math">\(P(B_2|A_2)\)</span> we can be far more certain. So for this reason we must evaluate the association rule based on two criteria - the probability <span class="math">\(P(B|A)\)</span> and also the support which is <span class="math">\(|Co(A,b)|\)</span>.  We should only consider association rules that have a support above a certain threshold value.</p>
+<h3>Potential problems with this method</h3>
+<ul>
+<li><strong>Is it scalable?</strong>  The training data has ~42 thousand unique tag words and many more unique post words.  Can this association rule algorithm be performed on a single machine given the size of the data?</li>
+<li><strong>What are the threshold values?</strong>  How do we determine how large the probabilities <span class="math">\(P(B|A)\)</span> and support need to be in order to warrant an association rule?  i.e. what is the optimal balance between overfitting and underfitting.</li>
+<li><strong>What about the likelihood of co-occurring tags?</strong>  In this method we are only generating association rules between post words and tags, but there is no doubt that certain tags are more likely to occur together than others.  We have that information in the training set.  Shouldn't we use that information too?
+These are all valid questions that we must think about before any kind of submission can be made...</li>
+</ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');
     mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
