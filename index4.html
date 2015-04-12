@@ -51,6 +51,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
                 <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
                 <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
                 <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
@@ -63,6 +64,73 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-4.html">Facebook Recruiting III Keyword Extraction - Part 4</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-09-26T00:00:00+02:00">
+          on&nbsp;Thu 26 September 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Finding Association Rules</h2>
+<p>The idea is to develop rules that assign tags to certain words in the post titles and bodies.  For example,</p>
+<p><span class="math">\(eclpise\rightarrow java
+\\derivative \rightarrow calculus
+\\matplotlib \rightarrow python\)</span></p>
+<p>where the words on the left side of the arrow are words in the title/body and words on the right side of the arrow are tags. Once these rules are found, they can be applied to the post words in the test set and the tag word predictions can be found trivially. But first we must come up with a method to generate these rules. This can be done probabilistically using word counts from the training set.</p>
+<h3>Using probabilities to generate association rules</h3>
+<p>The question that needs to be answered is given that word A appears in a post, what is the probability that tag B will also appear in that post? To get this probability, you need to count the number of posts in which word A appears and the also the number of posts in which both word A and tag B appear.  The desired probability can then be calculated as</p>
+<p><span class="math">\(P(B|A)=\frac{|Co(A,B)|}{|A|}\)</span></p>
+<p>where <span class="math">\(|Co(A,B)|\)</span> is the number of posts where word A and tag B co-occur and <span class="math">\(|A|\)</span> is the number of posts where word A occurs.  So, if <span class="math">\(P(B|A)\)</span> is above a certain threshold, we can then generate the association rule <span class="math">\(A \rightarrow B\)</span>. However, this probability is only a point estimate and does not give us any information regarding how certain we are about the estimate.  For example, it is possible to have one case where <span class="math">\(|Co(A_1,B_1)|=9\)</span> and <span class="math">\(|A_1|=10\)</span> thus <span class="math">\(P(B_1|A_1)=90\%\)</span> and a second case where <span class="math">\(|Co(A_2,B_2)|=89\)</span> and <span class="math">\(|A_2|=100\)</span> thus <span class="math">\(P(B_2|A_2)=89\%\)</span>. And since <span class="math">\(P(B_1|A_1)&gt;P(B_2|A_2)\)</span>, you might think that <span class="math">\(A_1 \rightarrow B_1\)</span> is a stronger association rule than <span class="math">\(A_2 \rightarrow B_2\)</span>. However, it is very possible that this assumption is incorrect because we cannot be certain that <span class="math">\(P(B_1|A_1)\)</span> is the true probability because the sample size is so small. Whereas for <span class="math">\(P(B_2|A_2)\)</span> we can be far more certain. So for this reason we must evaluate the association rule based on two criteria - the probability <span class="math">\(P(B|A)\)</span> and also the support which is <span class="math">\(|Co(A,b)|\)</span>.  We should only consider association rules that have a support above a certain threshold value.</p>
+<h3>Potential problems with this method</h3>
+<ul>
+<li><strong>Is it scalable?</strong>  The training data has ~42 thousand unique tag words and many more unique post words.  Can this association rule algorithm be performed on a single machine given the size of the data?</li>
+<li><strong>What are the threshold values?</strong>  How do we determine how large the probabilities <span class="math">\(P(B|A)\)</span> and support need to be in order to warrant an association rule?  i.e. what is the optimal balance between overfitting and underfitting.</li>
+<li><strong>What about the likelihood of co-occurring tags?</strong>  In this method we are only generating association rules between post words and tags, but there is no doubt that certain tags are more likely to occur together than others.  We have that information in the training set.  Shouldn't we use that information too?
+These are all valid questions that we must think about before any kind of submission can be made...</li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
         
         
 

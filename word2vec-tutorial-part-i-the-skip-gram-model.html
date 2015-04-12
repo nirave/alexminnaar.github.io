@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Word2Vec Tutorial Part I: The Skip-Gram Model</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
+                <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
+                <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+          </div>
+
+</div>
+
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/word2vec-tutorial-part-i-the-skip-gram-model.html" rel="bookmark"
+               title="Permalink to Word2Vec Tutorial Part I: The Skip-Gram Model">Word2Vec Tutorial Part I: The Skip-Gram Model</a></h1>
+
+        </header>
+
+        <div class="entry-content">
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-04-12T00:00:00+02:00">
+          on&nbsp;Sun 12 April 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+</div><!-- /.post-info -->          <p>In many natural language processing tasks, words are often represented by their <em>tf-idf</em> scores.  While these scores give us some idea of a word's relative importance in a document, they do not give us any insight into its semantic meaning.  <em>Word2Vec</em> is the name given to a class of neural network models that, given an unlabelled training corpus, produce a vector for each word in the corpus that encodes its semantic information.  These vectors are usefull for two main reasons.</p>
+<ol>
+<li>We can measure the semantic similarity between two words are by calculating the cosine similarity between their corresponding word vectors.  </li>
+<li>We can use these word vectors as features for various supervised NLP tasks such as document classification, named entity recognition, and sentiment analysis.  The semantic information that is contained in these vectors make them powerful features for these tasks.</li>
+</ol>
+<p>You may ask <em>"how do we know that these vectors effectively capture the semantic meanings of the words?"</em>.  The answer is because the vectors adhere surprisingly well to our intuition.  For instance, words that we know to be synonyms tend to have similar vectors in terms of cosine similarity and antonyms tend to have dissimilar vectors.  Even more surprisingly, word vectors tend to obey the laws of analogy.  For example, consider the analogy <em>"Woman is to queen as man is to king"</em>.  It turns out that</p>
+<p>
+<div class="math">$$v_{queen}-v_{woman}+v_{man} \approx v_{king}$$</div>
+</p>
+<p>where <span class="math">\(v_{queen}\)</span>,<span class="math">\(v_{woman}\)</span>,<span class="math">\(v_{man}\)</span>, and <span class="math">\(v_{king}\)</span> are the word vectors for <span class="math">\(queen\)</span>, <span class="math">\(woman\)</span>, <span class="math">\(man\)</span>, and <span class="math">\(king\)</span> respectively.  These observations strongly suggest that word vectors encode valuable semantic information about the words that they represent. </p>
+<p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model - as well as the techniques used to compute these models efficiently. In total there will be three posts</p>
+<ol>
+<li>The Skip-Gram Model.</li>
+<li>The Continuous Bag-of-Words Model (coming soon).</li>
+<li>Techniques for Computational Efficiency (coming soon).</li>
+</ol>
+<p>Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent both of which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
+<h1>The Skip-Gram Model</h1>
+<p>Before we define the <em>skip-gram</em> model, it would be instructive to understand the format of the training data that it accepts.  The input of the <em>skip-gram</em> model is a single word <span class="math">\(w_I\)</span> and the output is the words in <span class="math">\(w_I\)</span>'s context <span class="math">\(\{w_{O,1},...,w_{O,C}\}\)</span> defined by a word window of size <span class="math">\(C\)</span>.  For example, consider the sentence <em>"I drove my car to the store"</em>.  A potential training instance could be the word "car" as an input and the words {"I","drove","my","to","the","store"} as outputs.  All of these words are <em>one-hot</em> encoded meaning they are vectors of length <span class="math">\(V\)</span> (the size of the vocabulary) with a value of <span class="math">\(1\)</span> at the index corresponding to the word and zeros in all other indexes.  As you can see, we are essentially <em>creating</em> training examples from plain text which means that we can have a virtually unlimited number of training examples at our disposal.</p>
+<h2>Forward Propagation</h2>
+<p>Now let's define the <em>skip-gram</em> nerual network model as follows.</p>
+<p><img alt="skip-gram model" src="images/skip-gram.png" /> </p>
+<p>In the above model <span class="math">\(\mathbf{x}\)</span> represents the <em>one-hot</em> encoded vector corresponding to the input word in the training instance and <span class="math">\(\{\mathbf{y_1},...\mathbf{y_C}\}\)</span> are the <em>one-hot</em> encoded vectors corresponding to the output words in the training instance.  The <span class="math">\(V \times N\)</span> matrix <span class="math">\(\mathbf{W}\)</span> is the weight matrix between the input layer and hidden layer whose <span class="math">\(i^{th}\)</span> row represents the weights corresponding to the <span class="math">\(i^{th}\)</span> word in the vocabulary. This weight matrix <span class="math">\(\mathbf{W}\)</span> is what we are interested in learning because it contains the vector encodings of all of the words in our vocabulary (as its rows).  Each output word vector also has an associated <span class="math">\(N \times V\)</span> output matrix <span class="math">\(\mathbf{W'}\)</span>. There is also a hidden layer consisting of <span class="math">\(N\)</span> nodes (the exact size of <span class="math">\(N\)</span> is a training parameter).</p>
+<p>From my <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">previous blog post</a>, we know that the input to a unit in the hidden layer <span class="math">\(h_i\)</span> is simply the weighted sum of its inputs.  Since the input vector <span class="math">\(\mathbf{x}\)</span> is <em>one-hot</em> encoded, the weights coming from the nonzero element will be the only ones contributing to the hidden layer.  Therefore, for the input <span class="math">\(\mathbf{x}\)</span> with <span class="math">\(x_k=1\)</span> and <span class="math">\(x_{k'}=0\)</span> for all <span class="math">\(k' \neq k\)</span> the outputs of the hidden layer will be equivalent to the <span class="math">\(k^{th}\)</span> row of <span class="math">\(\mathbf{W}\)</span>.  Or mathematically,</p>
+<p>
+<div class="math">$$\mathbf{h}=\mathbf{x}^T \mathbf{W}=\mathbf{W}_{(k, .)} := \mathbf{v}_{w_I}$$</div>
+</p>
+<p>Notice that there is no activation function used here.  This is presumably because the inputs are bounded by the <em>one-hot</em> encoding.  In the same way, the inputs to each of the <span class="math">\(C \times V\)</span> output nodes is computed by the weighted sum of its inputs.  Therefore, the input to the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word is</p>
+<p>
+<div class="math">$$u_{c,j}=\mathbf{v'}_{w_j}^T \mathbf{h}$$</div>
+</p>
+<p>However we can also observe that the output layers for each output word share the same weights therefore <span class="math">\(u_{c,j}=u_j\)</span>.  We can finally compute the output of the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word via the <em>softmax</em> function which produces a multinomial distribution </p>
+<p>
+<div class="math">$$p(w_{c,j}=w_{O,c} | w_I)=y_{c,j}=\frac{exp(u_{c,j})}{\sum_{j'=1}^V exp(u_{j'})}$$</div>
+</p>
+<p>In plain english, this value is the probability that the output of the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word is equal to the actual value of the <span class="math">\(j^{th}\)</span> index of the <span class="math">\(c^{th}\)</span> output vector (which is <em>one-hot</em> encoded).</p>
+<h2>Learning the Weights with Backpropagation and Stochastic Gradient Descent</h2>
+<p>Now that we know how inputs are propograted forward through the network to produce outputs, we can derive the error gradients necessary for the backpropagation algorithm which we will use to learn both <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>.  The first step in deriving the gradients is defining a loss function.  This loss function will be</p>
+<p>
+<div class="math">$$\begin{align}
+E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
+&amp;= -\log \prod^C_{c=1} \frac{exp(u_{c,j^*_c})}{\sum^V_{j'=1} exp(u_j')} \\
+&amp;= -\sum^C_{c=1}u_{j^*_c} +C \cdot \log \sum^V_{j'=1} exp(u_{j'})
+\end{align}$$</div>
+</p>
+<p>which is simply the probability of the output words (the words in the input word's context) given the input word.  Here, <span class="math">\(j^*_c\)</span> is the index of the <span class="math">\(c^{th}\)</span> output word.  If we take the derivative with respect to <span class="math">\(u_{c,j}\)</span> we get</p>
+<p>
+<div class="math">$$\frac{\partial{E}}{\partial{u_{c,j}}}=y_{c,j}-t_{c,j}$$</div>
+</p>
+<p>where <span class="math">\(t_{c,j}=1\)</span> if the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> true output word is equal to <span class="math">\(1\)</span> (from its <em>one-hot</em> encoding), otherwise <span class="math">\(t_{c,j}=1\)</span>.  This is the prediction error for node <span class="math">\(c,j\)</span> (or the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word).</p>
+<p>Now that we have the error derivative with respect to inputs of the final layer, we can derive the derivative with respect to the output matrix <span class="math">\(\mathbf{W'}\)</span>.  Here we use the chain rule </p>
+<p>
+<div class="math">$$\begin{align}
+\frac{\partial E}{\partial w'_{ij}} &amp;=\sum^C_{c=1} \frac{\partial E}{\partial u_{c,j}} \cdot \frac{\partial u_{c,j}}{\partial w'_{ij}} \\
+&amp;=\sum^C_{c=1} (y_{c,j}-t_{c,j}) \cdot h_i
+\end{align}$$</div>
+</p>
+<p>Therefore the gradient descent update equation for the output matrix <span class="math">\(\mathbf{W'}\)</span> is</p>
+<p>
+<div class="math">$$w'^{(new)}_{ij} =w'^{(old)}_{ij}- \eta \cdot \sum^C_{c=1} (y_{c,j}-t_{c,j}) \cdot h_i$$</div>
+</p>
+<p>Now we can derive the update equation for the input-hidden layer weights in <span class="math">\(\mathbf{W}\)</span>.  Let's start by computing the error derivative with respect to the hidden layer.</p>
+<p>
+<div class="math">$$\begin{align}
+\frac{\partial{E}}{\partial{h_i}} &amp;=\sum^V_{j=1} \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{h_i}}  \\
+&amp;=\sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij}
+\end{align}$$</div>
+</p>
+<p>Now we are able to compute the derivative with respect to <span class="math">\(\mathbf{W}\)</span></p>
+<p>
+<div class="math">$$\begin{align}
+\frac{\partial{E}}{\partial{w_{ki}}} &amp;=\frac{\partial{E}}{\partial{h_i}} \cdot \frac{\partial{h_i}}{\partial{w_{ki}}} \\
+&amp;= \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_k
+\end{align}$$</div>
+</p>
+<p>and finally we arrive at our gradient descent equation for our input weights</p>
+<p>
+<div class="math">$$w^{(new)}_{ij} =w^{(old)}_{ij}- \eta \cdot \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_j$$</div>
+</p>
+<p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In a later post I will descibe two techniques - hierarchical softmax and negative sampling - which make this computation more efficient.</p>
+<h2>References</h2>
+<ul>
+<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
+<li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+        </div><!-- /.entry-content -->
+        <div class="comments">
+
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "word2vec-tutorial-part-i-the-skip-gram-model.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
+
+      </article>
+    </div>
+</section>
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>
