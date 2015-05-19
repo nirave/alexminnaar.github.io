@@ -85,7 +85,7 @@ Machine Learning at University College London. Natural language processing at Ve
         </li>
 
 	</ul>
-<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
 </div><!-- /.post-info -->          <p>In many natural language processing tasks, words are often represented by their <em>tf-idf</em> scores.  While these scores give us some idea of a word's relative importance in a document, they do not give us any insight into its semantic meaning.  <em>Word2Vec</em> is the name given to a class of neural network models that, given an unlabelled training corpus, produce a vector for each word in the corpus that encodes its semantic information.  These vectors are usefull for two main reasons.</p>
 <ol>
 <li>We can measure the semantic similarity between two words are by calculating the cosine similarity between their corresponding word vectors.  </li>
@@ -98,8 +98,8 @@ Machine Learning at University College London. Natural language processing at Ve
 <p>where <span class="math">\(v_{queen}\)</span>,<span class="math">\(v_{woman}\)</span>,<span class="math">\(v_{man}\)</span>, and <span class="math">\(v_{king}\)</span> are the word vectors for <span class="math">\(queen\)</span>, <span class="math">\(woman\)</span>, <span class="math">\(man\)</span>, and <span class="math">\(king\)</span> respectively.  These observations strongly suggest that word vectors encode valuable semantic information about the words that they represent. </p>
 <p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model - as well as the techniques used to compute these models efficiently. In total there will be three posts</p>
 <ol>
-<li>The Skip-Gram Model.</li>
-<li>The Continuous Bag-of-Words Model (coming soon).</li>
+<li>The Skip-Gram Model (this post).</li>
+<li><a href="www.alexminnaar.com/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">The Continuous Bag-of-Words Model</a>.</li>
 <li>Techniques for Computational Efficiency (coming soon).</li>
 </ol>
 <p>Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent both of which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
@@ -168,7 +168,12 @@ E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
 <p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In a later post I will descibe two techniques - hierarchical softmax and negative sampling - which make this computation more efficient.</p>
 <h2>References</h2>
 <ul>
-<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
+<li>
+<p><a href="www.alexminnaar.com/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></p>
+</li>
+<li>
+<p><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</p>
+</li>
 <li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
 </ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {

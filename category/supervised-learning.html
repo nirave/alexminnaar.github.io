@@ -71,6 +71,135 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
+                        <h1 class="entry-title"><a href="/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-05-18T00:00:00+02:00">
+          on&nbsp;Mon 18 May 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+</div><!-- /.post-info --><p>In the <a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">previous post</a> the concept of word vectors was explained as was the derivation of the <em>skip-gram</em> model.  In this post we will explore the other <em>Word2Vec</em> model - the <em>continuous bag-of-words</em> (CBOW) model.  If you understand the <em>skip-gram</em> model then the <em>CBOW</em> model should be quite straight-forward because in many ways they are mirror images of each other.  For instance, if you look at the model diagram</p>
+<p><img alt="skip-gram model" src="images/cbow.png" /> </p>
+<p>it looks like the <em>skip-gram</em> model with the inputs and outputs reversed.  The input layer consists of the <em>one-hot</em> encoded input context words <span class="math">\(\{\mathbf{x_1},...,\mathbf{x_C}\}\)</span> for a word window of size <span class="math">\(C\)</span> and vocabulary of size <span class="math">\(V\)</span>.  The hidden layer is an N-dimensional vector <span class="math">\(\mathbf{h}\)</span>.  Finally, the output layer is output word <span class="math">\(\mathbf{y}\)</span> in the training example which is also <em>one-hot</em> encoded.  The <em>one-hot</em> encoded input vectors are connected to the hidden layer via a <span class="math">\(V \times N\)</span> weight matrix <span class="math">\(\mathbf{W}\)</span> and the hidden layer is connected to the output layer via a <span class="math">\(N \times V\)</span> wieght matrix <span class="math">\(\mathbf{W'}\)</span>.</p>
+<h1>Forward Propagation</h1>
+<p>We must first understand how the output is computed from the input (i.e. forward propagation).  The following assumes that we know the input and output weight matrices (I will explain how these are actually learned in the next section).  The first step is to evaluate the output of the hidden layer <span class="math">\(\mathbf{h}\)</span>.  This is computed by</p>
+<p>
+<div class="math">$$\mathbf{h}=\frac{1}{C} \mathbf{W} \cdot (\sum^C_{i=1} \mathbf{x_i})$$</div>
+</p>
+<p>which is the average of the input vectors weighted by the matrix <span class="math">\(\mathbf{W}\)</span>.  It is worth noting that this hidden layer output computation is one of the only differences between the <em>continuous bag-of-words</em> model and the <em>skip-gram</em> model (in terms of them being mirror images of course).  Next we compute the inputs to each node in the output layer</p>
+<p>
+<div class="math">$$u_j= \mathbf{v'_{w_j}}^T \cdot \mathbf{h}$$</div>
+</p>
+<p>where <span class="math">\(\mathbf{v'_{w_j}}\)</span> is the <span class="math">\(j^{th}\)</span> column of the output matrix <span class="math">\(\mathbf{W'}\)</span>.  And finally we compute the output of the output layer.  The output <span class="math">\(y_j\)</span> is obtained by passing the input <span class="math">\(u_j\)</span> throught the soft-max function.</p>
+<p>
+<div class="math">$$y_j=p(w_{y_j} | w_1,...,w_C)=\frac{\exp(u_j)}{\sum^V_{j'=1} \exp(u_j')}$$</div>
+</p>
+<p>Now that we know how forward propagation works we can learn the weight matrices <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>.  </p>
+<h1>Learning the Weight Matrices with Backpropagation</h1>
+<p>In the process of learning the wieght matrices <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>, we begin with randomly initialized values.  We then sequentially feed training examples into our model and observe the error which is some function of the difference between the expected output and the actual output.  We then compute the gradient of this error with respect to the elements of both weight matrices and correct them in the direction of this gradient.  This general optimization procedure is known as stochastic gradient descent (or sgd) but the method by which the gradients are derived is known as backpropagation.  </p>
+<p>The first step is to define the loss function.  The objective is to maximize the conditional probability of the output word given the input context, therefore our loss function will be</p>
+<p>
+<div class="math">$$\begin{align}
+E &amp;= -\log p(w_O | w_I) \\
+&amp;= -u_{j*} - \log \sum_{j'=1}^V \exp(u_{j'})  \\
+&amp;=- \mathbf{v_{w_O}}^T \cdot \mathbf{h} - \log \sum_{j'=1}^V \exp(\mathbf{v_{w_{j'}}}^T \cdot \mathbf{h}) 
+\end{align}$$</div>
+</p>
+<p>Where <span class="math">\(j^*\)</span> is the index of the the actual output word.  The next step is to derive the update equation for the hidden-output layer weights <span class="math">\(\mathbf{W'}\)</span>, then derive the weights for the input-hidden layer weights <span class="math">\(\mathbf{W}\)</span></p>
+<h2>Updating the hidden-output layer weights</h2>
+<p>The first step is to compute the derivative of the loss function <span class="math">\(E\)</span> with respect to the input to the <span class="math">\(j^{th}\)</span> node in the output layer <span class="math">\(u_j\)</span>.</p>
+<p>
+<div class="math">$$\frac{\partial{E}}{\partial{u_j}}=y_j - t_j$$</div>
+</p>
+<p>where <span class="math">\(t_j=1\)</span> if <span class="math">\(j=j^*\)</span> otherwise <span class="math">\(t_j=0\)</span>.  This is simply the prediction error of node <span class="math">\(j\)</span> in the output layer.  Next we take the derivative of <span class="math">\(E\)</span> with respect to the output weight <span class="math">\(w'_{ij}\)</span> using the chain rule.</p>
+<p>
+<div class="math">$$\begin{align}
+\frac{\partial{E}}{\partial{w'_{ij}}} &amp;= \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{w'_{ij}}} \\
+&amp;= (y_j - t_j) \cdot h_i
+\end{align}$$</div>
+</p>
+<p>Now that we have the gradient with respect to an arbitrary output weight <span class="math">\(w'_{ij}\)</span>, we can define the stochastic gradient descent equation.</p>
+<p>
+<div class="math">$$w_{ij}^{'(new)}=w_{ij}^{'(old)} - \eta \cdot (y_j - t_j) \cdot h_i$$</div>
+</p>
+<p>or
+<div class="math">$$\mathbf{v'_{w_j}}^{(new)}=\mathbf{v'_{w_j}}^{(old)} - \eta \cdot (y_j - t_j) \cdot \mathbf{h}$$</div>
+</p>
+<p>where <span class="math">\(\eta&gt;0\)</span> is the learning rate. </p>
+<h2>Updating the input-hidden layer weights</h2>
+<p>Now let's try to derive a similar update equation for the input weights <span class="math">\(w_{ij}\)</span>.  The first step is to compute the derivative of <span class="math">\(E\)</span> with respect to an arbitrary hidden node <span class="math">\(h_i\)</span> (again using the chain rule).</p>
+<p>
+<div class="math">$$
+\begin{align}
+\frac{\partial{E}}{\partial{h_i}} &amp;= \sum^V_{j=1} \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{h_i}} \\
+&amp;= \sum^V_{j=1} (y_j - t_j) \cdot w'_{ij}
+\end{align}
+$$</div>
+</p>
+<p>where the sum is do to the fact that the hidden layer node <span class="math">\(h_i\)</span> is connected to each node of the output layer and therefore each prediction error must be incorporated.  The next step is to compute the derivative of <span class="math">\(E\)</span> with respect to an arbitrary input weight <span class="math">\(w_{ki}\)</span>.</p>
+<p>
+<div class="math">$$
+\begin{align}
+\frac{\partial{E}}{\partial{w_{ki}}} &amp;= \frac{\partial{E}}{\partial{h_i}} \cdot \frac{\partial{h_i}}{\partial{w_{ki}}}\\
+ &amp;= \sum^V_{j=1} (y_j - t_j) \cdot w'_{ij} \cdot \frac{1}{C} \cdot x_k \\
+ &amp; = \frac{1}{C}(\mathbf{x} \cdot EH)
+\end{align}
+$$</div>
+</p>
+<p>Where <span class="math">\(EH\)</span> is an N-dimensional vector of elements <span class="math">\(\sum^V_{j=1} (y_j - t_j) \cdot w'_{ij}\)</span> from <span class="math">\(i=1,...,N\)</span>.  However, since the inputs <span class="math">\(\mathbf{x}\)</span> are <em>one-hot</em> encoded, only one row of the <span class="math">\(N \times V\)</span> matrix <span class="math">\(\frac{1}{C}(\mathbf{x} \cdot EH)\)</span> will be nonzero.  Thus the final stochastic gradient descent equation for the input weights is</p>
+<p>
+<div class="math">$$\mathbf{v'_{w_{I,c}}}^{(new)}=\mathbf{v'_{w_{I,c}}}^{(old)} - \eta \cdot \frac{1}{C} \cdot EH$$</div>
+</p>
+<p>where <span class="math">\(w_{I,c}\)</span> is the <span class="math">\(c^{th}\)</span> word in the input context.</p>
+<h2>References</h2>
+<ul>
+<li><a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a></li>
+<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
+<li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
                         <h1 class="entry-title"><a href="/word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a></h1>
 <div class="post-info">
 	<ul>
@@ -82,7 +211,7 @@ Machine Learning at University College London. Natural language processing at Ve
         </li>
 
 	</ul>
-<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
 </div><!-- /.post-info --><p>In many natural language processing tasks, words are often represented by their <em>tf-idf</em> scores.  While these scores give us some idea of a word's relative importance in a document, they do not give us any insight into its semantic meaning.  <em>Word2Vec</em> is the name given to a class of neural network models that, given an unlabelled training corpus, produce a vector for each word in the corpus that encodes its semantic information.  These vectors are usefull for two main reasons.</p>
 <ol>
 <li>We can measure the semantic similarity between two words are by calculating the cosine similarity between their corresponding word vectors.  </li>
@@ -95,8 +224,8 @@ Machine Learning at University College London. Natural language processing at Ve
 <p>where <span class="math">\(v_{queen}\)</span>,<span class="math">\(v_{woman}\)</span>,<span class="math">\(v_{man}\)</span>, and <span class="math">\(v_{king}\)</span> are the word vectors for <span class="math">\(queen\)</span>, <span class="math">\(woman\)</span>, <span class="math">\(man\)</span>, and <span class="math">\(king\)</span> respectively.  These observations strongly suggest that word vectors encode valuable semantic information about the words that they represent. </p>
 <p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model - as well as the techniques used to compute these models efficiently. In total there will be three posts</p>
 <ol>
-<li>The Skip-Gram Model.</li>
-<li>The Continuous Bag-of-Words Model (coming soon).</li>
+<li>The Skip-Gram Model (this post).</li>
+<li><a href="www.alexminnaar.com/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">The Continuous Bag-of-Words Model</a>.</li>
 <li>Techniques for Computational Efficiency (coming soon).</li>
 </ol>
 <p>Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent both of which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
@@ -165,7 +294,12 @@ E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
 <p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In a later post I will descibe two techniques - hierarchical softmax and negative sampling - which make this computation more efficient.</p>
 <h2>References</h2>
 <ul>
-<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
+<li>
+<p><a href="www.alexminnaar.com/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></p>
+</li>
+<li>
+<p><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</p>
+</li>
 <li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
 </ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {

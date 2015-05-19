@@ -71,6 +71,107 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-5.html">Facebook Recruiting III Keyword Extraction - Part 5</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-10-05T00:00:00+02:00">
+          on&nbsp;Sat 05 October 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><h2>Implementing the association rule algorithm</h2>
+<p>As stated earlier, words in post titles and words in post bodies are fundamentally different with respect to their influence on the tags that are assigned to that post.  So for this reason, two sets of association rules will be generated - title-tag association rules and body-tag association rules.</p>
+<p>Since the dataset is so large, steps must be taken to make sure that we don't run out of RAM. We can do this by importing the dataset line-by-line such that only one line of the dataset is held in main memory at any one time before it is exported to another csv file.  The association rule algorithm can be implemented in the following steps.</p>
+<ol>
+<li><strong>Find All Combinations:</strong>  The first step is to find all combinations of words (title or body words depending on which set of rules you are finding) and tags that appear in the same posts.  The list of all combinations will be huge! Mine came to about 13GB which would definitely generate a memory error if you were to hold it all in main memory, so each combination must be exported sequentially into another csv file.</li>
+<li><strong>Count All Combinations:</strong>  Now you must import that huge list of all combinations and count the number of times each distinct combination appears in the list.  The counts must be held in main memory, but since you are only holding the counts of each distinct combination, it will be much smaller than 13GB (mine came to about 1.5GB).  Now you have <span class="math">\(|Co(A,B)|\)</span> for all words <span class="math">\(A\)</span> and tags <span class="math">\(B\)</span>!</li>
+<li><strong>Count Overall Word Occurrences:</strong> Next, in order to calculate the required probabilities, we need to count the number of occurrences of each word in the set of post titles (or bodies).</li>
+<li><strong>Calculate Probabilities and Save as Dictionary:</strong>  Now, since we have the word counts and the co-occurrence counts, we can calculate the required probability <span class="math">\(P(B|A)\)</span> for each combination.</li>
+</ol>
+<h3>Code snippets</h3>
+<p>Here are a few snippets of python code to give us a better understanding of how the above steps can be implemented.  The following snippet finds all combinations of words and tags</p>
+<div class="highlight"><pre><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;input_file.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">r</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;output_file.csv&quot;</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+     <span class="n">rdr</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rdr</span><span class="p">:</span>
+          <span class="n">a</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+          <span class="n">b</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+          <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span> <span class="n">b</span><span class="o">.</span><span class="n">split</span><span class="p">()):</span>
+               <span class="n">w</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;{},{}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</pre></div>
+
+
+<p>where a is a string containing the title (or body) of a post and b is a string containing the list of tags for that post.  Also, the product() function is part of the python itertools package which would need to be imported.
+This next snippet shows how the combinations are then counted.</p>
+<div class="highlight"><pre><span class="n">counter</span><span class="o">=</span><span class="p">{}</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;output_file.csv&quot;</span><span class="p">,</span><span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_name</span><span class="p">:</span>
+     <span class="n">reader</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
+          <span class="n">pair</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+          <span class="k">if</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">counter</span><span class="p">:</span>
+               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">+=</span><span class="mi">1</span>
+          <span class="k">else</span><span class="p">:</span>
+               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+
+
+<p>where counter is a dictionary whose key is a word/tag pair and its value is the count of the number of times they co-occur.  All of the other steps in the algorithm can be implemented by modifying these two code snippets in some way.</p>
+<h3>Some results</h3>
+<p>Here are some examples of probability distributions <span class="math">\(P(B|A)\)</span> for different words <span class="math">\(A\)</span>.</p>
+<p>The first of the following plots shows the top 10 most likely tags when the word "C++" appears in a post title and the second plot shows the top 10 most likely tags when "C++" appears in a post body.</p>
+<p><img alt="alt text" src="images/cplusplus3.png" title="C++ title" /> 
+<img alt="alt text" src="images/cplusplus_body1.png" title="C++ body" /></p>
+<p>As one might expect, the most likely tag (by a large margin) is "c++".  It is also interesting to see that the likelihoods are significantly larger for when "C++" appears in the title.  This makes sense intuitively because titles are short and succinct and therefore each title word should generally be more descriptive of the overall post than a word in the post body.</p>
+<p>The next set of plot is for the word "sql".</p>
+<p><img alt="alt text" src="images/sql.png" title="SQL title" /> 
+<img alt="alt text" src="images/sql_body.png" title="SQL body" /></p>
+<p>What is interesting about these tag likelihoods is that there is not a clear winner.  The tags "sql" and "sql-server" are both quite likely.</p>
+<p>The next set of plot is for the more obscure word "geodesic".</p>
+<p><img alt="alt text" src="images/geodesic3.png" title="Geodesic title" /> 
+<img alt="alt text" src="images/geodesic_body.png" title="Geodesic body" /></p>
+<p>There are several interesting differences with these plots.  The first is that the actual post word "geodesic" is not in the top ten most likely tags (it is probably not even in the set of possible tags).  Another difference is that the tag likelihoods are actually larger when "geodesic" appears in the post body.  This is probably because "geodesic" is a more obscure word than "C++" and "sql".</p>
+<p>The next step is to use these association rules to make predictions.  Stay tuned...</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
                         <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-4.html">Facebook Recruiting III Keyword Extraction - Part 4</a></h1>
 <div class="post-info">
 	<ul>

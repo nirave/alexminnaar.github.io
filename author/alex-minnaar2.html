@@ -71,6 +71,272 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
+                        <h1 class="entry-title"><a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-01-05T00:00:00+01:00">
+          on&nbsp;Mon 05 January 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>In this blog post I will descibe an interesting Akka mini-project that I came across which helped me gain a deeper understanding of Akka's asynchronous actor model.  In this project we use Akka to build a distributed binary search tree where each node in the tree is an actor which allows it to be a completely asynchronous, concurrent, and distributed version of the traditional data structure.  But before we get into the Akka stuff, it would be helpful to remind ourselves of some of the basic properties of a binary search tree.</p>
+<h2>Binary Search Tree Basics</h2>
+<p>A binary search tree is a tree-based data structure with the following properites</p>
+<ol>
+<li>Each node in the tree stores an element and can have at most two child nodes.</li>
+<li>The tree does not contain any duplicate values.</li>
+<li>Elements in a node's left subtree are strictly smaller than the node's element.</li>
+<li>Elements in a node's right subtree are strictly greater than the node's element.</li>
+</ol>
+<p><img alt="binary search tree" src="images/Binary_search_tree.svg" /> </p>
+<p>There are also three main tasks a binary search tree can perform.</p>
+<ul>
+<li><strong>Contains</strong>: Determine if a node containing a particular element exists in the tree by performing a binary tree search.  This is done by starting at the root node and recursively searching the tree by selecting the left or right subtree based on the node's value and the value that we are searching for.  We know that the value does not exist in the tree if we reach an external node and have not yet found it. </li>
+<li><strong>Insert</strong>: Insert a new node in the correct place in the tree given its value.  This is also done with a tree search.  Assuming the element does not already exist in the tree, we search for the value that we wish to insert until we arrive at an external node at which point we add the new node as its right or left child depending on its value.</li>
+<li><strong>Remove</strong>: Remove an element from the tree and rearrange the remaining nodes in order to keep the desired structure.  If the node you wish to delete is an external node you simply remove it, however if it has children it is more complicated.  One way to deal with this is to identify its in-order predecessor in the left subtree.  This is the greatest element in the left subtree which can be found by recursively selecting the right child within this subtree (in other words it is the right-most element in the left subtree).  This in-order predecessor is then removed (it is an external node so this is simple) and is used to replace the node that is to be deleted.  The opposite procedure would work as well (i.e. replacing the node with its in-order successor in the right subtree).</li>
+</ul>
+<p>Before we create an Akka application that implements a binary search tree let's briefly review the basics of the actor model.</p>
+<h2>Actor Model Basics</h2>
+<p>Actors are completely incapsulated, asynchronous entities that are each designed to perform a specific task.  The only way that actors can communicate with each other is through message passing.  Message passing is asynchronous meaning an actor can send a message and then immediately continue performing other tasks (it doesn't have to wait for a response).  When a message is sent to an actor, it is put in a queue and the actor performs the tasks corresponding to each message sequentially, therefore actors are themselves single-threaded.  Furthermore, due to these properties, actors can be distributed in a cluster with essentially the same code as if they were on the same machine which makes things very convenient.</p>
+<p>Now let's start to build our Akka application.</p>
+<h2>Tree Nodes as Actors</h2>
+<p>We will create one main actor called <code>BinaryTreeSet</code> which receives the <code>Contains</code>, <code>Insert</code>, and <code>Remove</code> messages for the entire tree.  As stated previously, each node of the tree will also be an actor which we will call <code>BinaryTreeNode</code>.  Actors usually incapsulate an immutable state.  The <code>BinaryTreeSet</code> actor's state contains the root node of the tree which is a <code>BinaryTreeNode</code> actor.  Each <code>BinaryTreeNode</code> actor's state contains the value that the node holds as well as references to its two children (which are also <code>BinaryTreeNode</code> actors).</p>
+<p>Let's first focus on the <code>BinaryTreeSet</code> actor.  An actor class extends Akka's <code>Actor</code> trait and its messages are customarily defined in its companion object as case classes. The following code implements this companion object.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">BinaryTreeSet</span> <span class="o">{</span>
+
+  <span class="k">trait</span> <span class="nc">Operation</span> <span class="o">{</span>
+    <span class="k">def</span> <span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span>
+    <span class="k">def</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span>
+    <span class="k">def</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span>
+  <span class="o">}</span>
+
+  <span class="k">trait</span> <span class="nc">OperationReply</span> <span class="o">{</span>
+    <span class="k">def</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span>
+  <span class="o">}</span>
+
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Operation</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Contains</span><span class="o">(</span><span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Operation</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Remove</span><span class="o">(</span><span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Operation</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">OperationReply</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The <code>Insert</code>, <code>Contains</code>, and <code>Remove</code> messages each have three fields</p>
+<ul>
+<li><code>requester</code> which is a reference to the actor that sent the request.</li>
+<li><code>id</code> which is a unique id for the message.</li>
+<li><code>elem</code> which is the value to be inserted (<code>Insert</code>), removed (<code>Remove</code>) or searched for (<code>Contains</code>).</li>
+</ul>
+<p>There is also an <code>OperationFinished</code> message which is sent back to the <code>BinaryTreeSet</code> actor when the operation specified by the <code>id</code> field is finished.  </p>
+<p>Now let's look at the <code>BinaryTreeSet</code> actor class.  </p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">BinaryTreeSet</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeSet._</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeNode._</span>
+
+  <span class="k">def</span> <span class="n">createRoot</span><span class="k">:</span> <span class="kt">ActorRef</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">BinaryTreeNode</span><span class="o">.</span><span class="n">props</span><span class="o">(</span><span class="mi">0</span><span class="o">,</span> <span class="n">initiallyRemoved</span> <span class="k">=</span> <span class="kc">true</span><span class="o">))</span>
+
+  <span class="k">var</span> <span class="n">root</span> <span class="k">=</span> <span class="n">createRoot</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="n">normal</span>
+
+  <span class="k">val</span> <span class="n">normal</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="n">operation</span><span class="k">:</span> <span class="kt">Operation</span> <span class="o">=&gt;</span> <span class="n">root</span> <span class="o">!</span> <span class="n">operation</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Here the tree's root node actor <code>root</code> is created using the <code>context.actorOf</code> method.  The <code>Receive</code> method accepts <code>Operation</code> messages and sends them to <code>root</code>.  Essentially, all messages are sent to the root node and are executed within nodes of the tree which are <code>BinaryTreeNode</code> actors.  So let's look at the <code>BinaryTreeNode</code> implementation.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">BinaryTreeNode</span> <span class="o">{</span>
+  <span class="k">trait</span> <span class="nc">Position</span>
+
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Left</span> <span class="k">extends</span> <span class="nc">Position</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Right</span> <span class="k">extends</span> <span class="nc">Position</span>
+
+  <span class="k">def</span> <span class="n">props</span><span class="o">(</span><span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">initiallyRemoved</span><span class="k">:</span> <span class="kt">Boolean</span><span class="o">)</span> <span class="k">=</span> <span class="nc">Props</span><span class="o">(</span><span class="n">classOf</span><span class="o">[</span><span class="kt">BinaryTreeNode</span><span class="o">],</span>  <span class="n">elem</span><span class="o">,</span> <span class="n">initiallyRemoved</span><span class="o">)</span>
+<span class="o">}</span>
+<span class="k">class</span> <span class="nc">BinaryTreeNode</span><span class="o">(</span><span class="k">val</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">initiallyRemoved</span><span class="k">:</span> <span class="kt">Boolean</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeNode._</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeSet._</span>
+
+  <span class="k">var</span> <span class="n">subtrees</span> <span class="k">=</span> <span class="nc">Map</span><span class="o">[</span><span class="kt">Position</span>, <span class="kt">ActorRef</span><span class="o">]()</span>
+  <span class="k">var</span> <span class="n">removed</span> <span class="k">=</span> <span class="n">initiallyRemoved</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="n">normal</span>
+
+  <span class="k">val</span> <span class="n">normal</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{...}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Where the <code>subtrees</code> map holds the node's left and right children which are themselves <code>BinaryTreeNode</code> actors. The <code>Receive</code> method is left blank so that we can look at the <code>Operation</code> message implementations in more detail.  Let's do this now.</p>
+<h3>Contains Messages</h3>
+<p>As mentioned previously, a binary tree can be searched by recursively selecting each child depending on the value of the current node and the value of the element that is being searched for until either the element is found or an external node is reached.  The child to select can be found using this simple function</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToFind</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Position</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">elemToFind</span> <span class="o">&gt;</span> <span class="n">elem</span><span class="o">)</span> <span class="nc">Right</span>
+    <span class="k">else</span> <span class="nc">Left</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>We can now implement the functionality to process <code>Contains</code> messages as follows.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">Contains</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToFind</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">elem</span> <span class="o">!=</span> <span class="n">elemToFind</span> <span class="o">||</span> <span class="o">(</span><span class="n">elem</span> <span class="o">==</span> <span class="n">elemToFind</span> <span class="o">&amp;&amp;</span> <span class="n">removed</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">child</span> <span class="k">=</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToFind</span><span class="o">)</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">child</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">subtrees</span><span class="o">(</span><span class="n">child</span><span class="o">)</span> <span class="o">!</span> <span class="nc">Contains</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToFind</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">requester</span> <span class="o">!</span> <span class="nc">ContainsResult</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="kc">false</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="k">else</span> <span class="o">{</span>
+        <span class="n">requester</span> <span class="o">!</span> <span class="nc">ContainsResult</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="kc">true</span><span class="o">)</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Basically, if the desired value is in the current node and hasn't been removed then the <code>ContainsResult(id, true)</code> message is sent back to the requester.  If it is not and it is not an external node, then the same message is sent to the correct child.  If it is an external node then the element does not exist in the tree and a <code>ContainsResult(id, false)</code> is sent back to the requester.</p>
+<h3>Insert Messages</h3>
+<p><code>Insert</code> messages can be handled in a similar way.  Again we search the tree and when we get to an external node we create a new <code>BinaryTreeNodeActor</code> that holds the element to insert and add this node to the external node's <code>subtree</code> map.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToInsert</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">elem</span> <span class="o">!=</span> <span class="n">elemToInsert</span> <span class="o">||</span> <span class="o">(</span><span class="n">elem</span> <span class="o">==</span> <span class="n">elemToInsert</span> <span class="o">&amp;&amp;</span> <span class="n">removed</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">child</span> <span class="k">=</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToInsert</span><span class="o">)</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">child</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">subtrees</span><span class="o">(</span><span class="n">child</span><span class="o">)</span> <span class="o">!</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToInsert</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">subtrees</span> <span class="o">+=</span> <span class="o">(</span><span class="n">child</span> <span class="o">-&gt;</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">BinaryTreeNode</span><span class="o">.</span><span class="n">props</span><span class="o">(</span><span class="n">elemToInsert</span><span class="o">,</span> <span class="kc">false</span><span class="o">)))</span>
+          <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="k">else</span> <span class="o">{</span>
+        <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<h3>Remove Messages</h3>
+<p>Remove messages are more difficult to deal with.  We will not be implementing the same removal procedure as described in <em>Binary Search Tree Basics</em>.  Unlike node search and insertion, node removal results in a tree restructuring.  This is problematic in aysnchronous applications.  For example, what if  a removal causes a tree restructuring that occurs while other messages are still being processed and coming in? Synchronization is required for tree restructuring which does not fit within the actor model.  For this reason, we will handle removal by giving each node a <code>removed</code> flag that indicates if the node has been removed.  This way, removal occurs by simply setting the <code>removed</code> flag to <code>true</code>.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">Remove</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToRemove</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">elem</span> <span class="o">!=</span> <span class="n">elemToRemove</span> <span class="o">||</span> <span class="o">(</span><span class="n">elem</span><span class="o">==</span><span class="n">elemToRemove</span> <span class="o">&amp;&amp;</span> <span class="n">removed</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">child</span> <span class="k">=</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToRemove</span><span class="o">)</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">child</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">subtrees</span><span class="o">(</span><span class="n">child</span><span class="o">)</span> <span class="o">!</span> <span class="nc">Remove</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToRemove</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="k">else</span> <span class="o">{</span>
+        <span class="n">removed</span> <span class="k">=</span> <span class="kc">true</span>
+        <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>This makes removal asynchronous and much simpler however it also means that we will be accumulating nodes that have been removed which could become problematic in terms of memory.  We will deal with this by introducing a new type of message called <code>GC</code> (for <em>Garbage Collection</em>) that the main <code>BinaryTreeSet</code> actor can receive.  When this message is received, all of the nodes in the tree that haven't been removed (i.e. where <code>removed = false</code>) are copied and inserted into a new tree (with a new root node) which results in a new tree where the nodes that have been removed are <em>actually</em> removed.  Also, when the copy is completed, all of the actors in the old tree are stopped.  There will also be a <code>CopyTo</code> message which holds the root node of the new tree as a field.  This message is recursively sent to each node in the old tree and if its <code>removed</code> flag is <code>false</code> then it is inserted into the new tree. One more thing we must deal with is what to do with messages that come in while garbage collection is taking place.  We will deal with this by enqueuing these messages and then begin processing them once garbage collection has completed.</p>
+<p>So once the <code>GC</code> message is received by the <code>BinaryTreeSet</code> actor, it enters into a new context where it waits for the new tree to be copied while also enqueuing other messages that are received during this time.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">GC</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="k">val</span> <span class="n">newRoot</span> <span class="k">=</span> <span class="n">createRoot</span>
+      <span class="n">root</span> <span class="o">!</span> <span class="nc">CopyTo</span><span class="o">(</span><span class="n">newRoot</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">garbageCollecting</span><span class="o">(</span><span class="n">newRoot</span><span class="o">))</span>
+    <span class="o">}</span>
+</pre></div>
+
+
+<div class="highlight"><pre>  <span class="k">def</span> <span class="n">garbageCollecting</span><span class="o">(</span><span class="n">newRoot</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="n">operation</span><span class="k">:</span> <span class="kt">Operation</span> <span class="o">=&gt;</span> <span class="n">pendingQueue</span><span class="o">.</span><span class="n">enqueue</span><span class="o">(</span><span class="n">operation</span><span class="o">)</span>
+
+    <span class="k">case</span> <span class="nc">CopyFinished</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">root</span> <span class="o">!</span> <span class="nc">PoisonPill</span>
+      <span class="k">val</span> <span class="n">newRoot</span> <span class="k">=</span> <span class="n">createRoot</span>
+      <span class="n">root</span> <span class="k">=</span> <span class="n">newRoot</span>
+
+      <span class="n">pendingQueue</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">root</span> <span class="o">!</span> <span class="k">_</span><span class="o">)</span>
+      <span class="n">pendingQueue</span> <span class="k">=</span> <span class="nc">Queue</span><span class="o">.</span><span class="n">empty</span>
+
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">normal</span><span class="o">)</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Then once it receives the <code>CopyFinished</code> message, it executes all of the messages that are in the queue and  returns to its normal context.  For the <code>BinaryTreeNode</code> actors, the <code>CopyTo</code> message is handled as follows.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">CopyTo</span><span class="o">(</span><span class="n">newRoot</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="k">if</span> <span class="o">(!</span><span class="n">removed</span><span class="o">){</span>
+        <span class="n">newRoot</span> <span class="o">!</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">self</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="n">elem</span><span class="o">)</span>
+      <span class="o">}</span>
+
+      <span class="n">subtrees</span><span class="o">.</span><span class="n">values</span> <span class="n">foreach</span> <span class="o">(</span><span class="k">_</span> <span class="o">!</span> <span class="nc">CopyTo</span><span class="o">(</span><span class="n">newRoot</span><span class="o">))</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">removed</span> <span class="o">&amp;&amp;</span> <span class="n">subtrees</span><span class="o">.</span><span class="n">isEmpty</span><span class="o">){</span>
+        <span class="n">sender</span> <span class="o">!</span> <span class="nc">CopyFinished</span>
+      <span class="o">}</span>
+      <span class="k">else</span><span class="o">{</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">copying</span><span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">toSet</span><span class="o">,</span> <span class="n">insertConfirmed</span> <span class="k">=</span> <span class="n">removed</span><span class="o">,</span> <span class="n">sender</span><span class="o">))</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>i.e. if the node has not been removed, insert it into the new tree.  Alternatively, if it has been removed and it is an external node, then there is nothing left to copy and the <code>CopyFinished</code> message is sent back to the sending node.  Once a node sends the <code>CopyTo</code> message to its children, it enters a <code>copying</code> context in which it waits for each of its children to return a <code>CopyFinished</code> message, at which point the node itself returns a <code>CopyFinished</code> message to its parent until eventually the <code>BinaryTreeSet</code> actor (the actor that initially sent the <code>CopyTo</code> message) receives a <code>CopyFinished</code> message and we know that all nodes have been copied. The <code>copying</code> context is shown below.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="n">copying</span><span class="o">(</span><span class="n">expected</span><span class="k">:</span> <span class="kt">Set</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">],</span> <span class="n">insertConfirmed</span><span class="k">:</span> <span class="kt">Boolean</span><span class="o">,</span> <span class="n">originator</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="k">_</span><span class="o">)</span> <span class="k">=&gt;</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">expected</span><span class="o">.</span><span class="n">isEmpty</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">originator</span> <span class="o">!</span> <span class="nc">CopyFinished</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">normal</span><span class="o">)</span>
+      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">copying</span><span class="o">(</span><span class="n">expected</span><span class="o">,</span> <span class="n">insertConfirmed</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span> <span class="n">originator</span><span class="o">))</span>
+      <span class="o">}</span>
+    <span class="k">case</span> <span class="nc">CopyFinished</span> <span class="k">=&gt;</span>
+      <span class="k">val</span> <span class="n">newExpected</span> <span class="k">=</span> <span class="n">expected</span> <span class="o">-</span> <span class="n">sender</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">newExpected</span><span class="o">.</span><span class="n">isEmpty</span> <span class="o">&amp;&amp;</span> <span class="n">insertConfirmed</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">originator</span> <span class="o">!</span> <span class="nc">CopyFinished</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">normal</span><span class="o">)</span>
+      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">copying</span><span class="o">(</span><span class="n">newExpected</span><span class="o">,</span> <span class="n">insertConfirmed</span><span class="o">,</span> <span class="n">originator</span><span class="o">))</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>And that is the basic functionality of the distributed binary search tree.  The full code is available on <a href="https://github.com/alexminnaar/ActorBinaryTree">this github repo</a>.  Hopefully this blog post has shed some light on the Akka actor model and how it can be used to build concurrent, distributed applications like this one.</p>
+<h2>References</h2>
+<ul>
+<li><a href="http://akka.io/">The Akka Homepage</a></li>
+<li><a href="https://www.coursera.org/course/reactive">Principles of Reactive Programming Coursera Course</a></li>
+<li><a href="https://github.com/alexminnaar/ActorBinaryTree">GitHub repository</a> for the code used in this post.</li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
                         <h1 class="entry-title"><a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution</a></h1>
 <div class="post-info">
 	<ul>
@@ -805,149 +1071,6 @@ Topic 5: disparity, binding, similarity, protein, structural, clause, instructio
 <p><span class="math">\(\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}\)</span> and <span class="math">\(\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}\)</span></p>
 <p>The count matrices are transformed into probability matrices in place to save on memory.  The <code>printTopics</code> method prints the topics found from the <span class="math">\(\theta\)</span> matrix in terms of the most likely words for each topic.  The <code>printTopicProps</code> method prints the most likely topics for a particular document within the corpus from the <span class="math">\(\phi\)</span> matrix.</p>
 <p>Hopefully this series of blog posts has shed some light on some of the mysteries of Latent Dirichlet Allocation.  The above code snippets were taken from my Scala implementation that you can find at my <a href="https://github.com/alexminnaar/ScalaTopicModels">ScalaTopicModels github repo</a>.</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2014-06-22T00:00:00+02:00">
-          on&nbsp;Sun 22 June 2014
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><p>I wanted to write a two-part blog post on Latent Dirichlet Allocation.  When I was first learning about this algorithm I became somewhat frustrated because it seemed that many learning resources either explained the theory behind Latent Dirichlet Allocation or provided code but none actually explained the connection between the two.  In other words, it was difficult for me to identify the various aspects of the theory behind Latent Dirichlet Allocation algorithm in the code itself.  So the goal of these two blog posts is to both explain the theory behind Latent Dirichlet Allocation and specifically how that theory can be transformed into implementable code.  In this case, I will be using the Scala programming language because that is what I am currently working with professionally.</p>
-<p>This first blog entry will focus on the theory behind LDA and the <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">next post</a> will focus on its transformation into implementable code.</p>
-<h2>Why Learn about Latent Dirichlet Allocation (LDA)?</h2>
-<p>There are many reasons to want to learn about LDA such as</p>
-<ol>
-<li>What it does is very useful.  Given a set of documents, it assigns to each topic a distribution over words and to each document a distribution over topics in a completely unsupervised way.  So essentially, it is a way to figure out what each document in a set of documents is about without having to actually read them!  For that reason, it is a great tool to use for a multitude of text categorization tasks.</li>
-<li>It is a great practical example of Bayesian inference.  If you are looking to improve your understand Bayesian inference, understanding LDA would definitely help with this.</li>
-</ol>
-<h2>Probability Distributions involved in LDA</h2>
-<p>The two probability distributions used in LDA are the multinomial distribution and the Dirichlet distribution.</p>
-<h3>The Multinomial Distribution</h3>
-<p>The multinomial distribution models the histogram of outcomes of an experiment with <span class="math">\(k\)</span> possible outcomes that is performed <span class="math">\(T\)</span> times.  The parameters of this distribution are the probabilities of each of the <span class="math">\(k\)</span> possible outcomes occurring in a single trial, <span class="math">\(p_1,...,p_k\)</span>.  This is a discrete, multi-variate distribution with probability mass function</p>
-<p><span class="math">\(P(x_1,...,x_k |T,p_1,...,p_k)=\frac{T!}{\prod_{i=1}^kx_i!}p_i^{x_i}\)</span> where <span class="math">\(x_i \geq 0\)</span></p>
-<p>A good example of how the multinomial distribution is used is to think of rolling a dice several times.  Say you want to know the probability of rolling 3 fours, 2 sixes, and 4 ones in 9 total rolls given that you know the probability of landing on each side of the dice.  The multinomial distribution models this probability.</p>
-<h3>The Dirichlet Distribution</h3>
-<p>It is obvious from its name that the Dirichlet distribution is involved in Latent Dirichlet Allocation.  The Dirichlet distribution is sometimes difficult to understand because it deals with distributions over the probability simplex.  What this means is that the Dirichlet distribution is a distribution over discrete probability distributions.  Its probability mass function is</p>
-<p><span class="math">\(P(P=\{p_i\}|\alpha_i)=\frac{\prod_i \Gamma(\alpha_i)}{\Gamma(\sum_i \alpha_i)}\prod_ip_i^{\alpha_i-1}\)</span>  where <span class="math">\(\sum_ip_i=1\)</span> and <span class="math">\(p_i \geq 0\)</span></p>
-<p>The key to understanding the Dirichlet distribution is realizing that instead of it being a distribution over events or counts (as most probability distributions are), it is a distribution over discrete probability distributions (eg. multinomials).</p>
-<p>Another important note is that the Dirichlet distribution is the conjugate prior to the multinomial distribution.  This means that the posterior distribution for a multinomial likelihood with a Dirichlet prior over its parameters is also a Dirichlet distribution.  In fact, the posterior is the following Dirichlet distribution</p>
-<p><span class="math">\(P(p_1,...,p_k|x_1,...x_k)=\frac{\prod_i \Gamma(\alpha_i+x_i)}{\Gamma(N+\sum_i \alpha_i)}\prod_ip_i^{\alpha_i+x_i-1}\)</span></p>
-<p>The proof is not shown here but it can be derived by multiplying the multinomial likelihood with the Dirichlet prior in a straight-forward way.</p>
-<h2>The LDA Generative Model</h2>
-<p>LDA uses what is called a generative model as a means to explain how the observed words in a corpus are generated from an underlying latent structure.  The following picture shows how this generative model works.</p>
-<p><img alt="alt text" src="images/smoothed_lda.png" title="lda graphical model" /> </p>
-<p>This may look complicated at first but every part of this model can be explained. Node <span class="math">\(w\)</span> represents the observed words in the corpus.  It is shaded to indicate that it is observed and not a latent variable.  But before we explore the other nodes in the model, the intuition behind the generative model should be explained.  LDA makes the assumption that a document in a corpus is a distribution over topics and a topic is a distribution over words.  So given a distribution over topics for a particular document, the actual words that appear in the document are generated by first sampling a topic from the distribution over topics then sampling a word from the sampled topic which is itself a distribution over words.  This is a somewhat natural way to think about documents.  A document can contain several different topics with varying proportions and some words are more associated with some topics than others.</p>
-<p>Now let's get back into the generative model.  Instead of starting with <span class="math">\(w\)</span> the observed word node, let's start at the outside.  Both <span class="math">\(\beta\)</span> and <span class="math">\(\alpha\)</span> are each parameters of two separate Dirichlet distributions which are represented by the two outer nodes in the generative model.  These two Dirichlet distributions are priors for two multinomial distributions which are parameterized by <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> where <span class="math">\(Multinomial(\theta)\)</span> is the distribution over topics for a given document and <span class="math">\(Multinomial(\phi)\)</span> is the distribution over words for a given topic.  And since there are <span class="math">\(K\)</span> topics and <span class="math">\(M\)</span> documents, there are <span class="math">\(M\)</span> <span class="math">\(\theta\)</span> vectors, each of which are <span class="math">\(K\)</span> elements in length.  Similarly, since there are <span class="math">\(N\)</span> unique words in the corpus, there are <span class="math">\(K\)</span> <span class="math">\(\phi\)</span> vectors, each of which are <span class="math">\(N\)</span> elements in length.  A good way to think of these parameters is as two matrices.</p>
-<p><img alt="alt text" src="images/theta.png" title="theta" /> </p>
-<p><img alt="alt text" src="images/phi.png" title="phi" /> </p>
-<p>Where each row is a parameterization of a multinomial distribution.  It also probably important to note that in the previous section the multinomial distribution was said to have a parameter <span class="math">\(T\)</span> representing the number of trials.  In the case of LDA, <span class="math">\(T=1\)</span> (sometimes this is called a categorical distribution rather than a multinomial distribution).  And finally, <span class="math">\(Z\)</span> is the topic assigned to word <span class="math">\(w\)</span>.</p>
-<p>So, in summary, the generative process is the following.</p>
-<ol>
-<li>All of the Multinomical parameter vectors for all documents <span class="math">\(\theta\)</span> are each sampled from <span class="math">\(Dir(\alpha)\)</span>.</li>
-<li>The other Mutlinomial parameter vectors for all topics <span class="math">\(\phi\)</span> are each sampled from <span class="math">\(Dir(\beta)\)</span>.</li>
-<li>The for each word index <span class="math">\(n\)</span> in document <span class="math">\(i\)</span> where <span class="math">\(i \in \{1,...,M\}\)</span>.<ol>
-<li>The topic assignment for <span class="math">\(n\)</span>, <span class="math">\(z_{n,i}\)</span> is sampled from the Multinomial distribution with parameter <span class="math">\(\theta_i\)</span> corresponding to document <span class="math">\(i\)</span>.</li>
-<li>The word with index <span class="math">\(n\)</span> is sampled from the Multinomial distributinon with parameter determined from the topic that was sampled in the last step <span class="math">\(\phi_{z_n,i}\)</span>.</li>
-</ol>
-</li>
-</ol>
-<p>And given the above graphical model, it is straight-forward to show that the joint distribution is</p>
-<p><span class="math">\(P(\theta,\phi,Z,W|\alpha,\beta)=\prod_{j=1}^KP(\phi_j|\beta)\prod_{i=1}^MP(\theta_i|\alpha)\prod_{n=1}^NP(z_{i,n}|\theta_i)P(w_{i,n}|z_{i,n},\phi_{z_{i,n}})\)</span></p>
-<p>Therefore, the ultimate goal is to determine the unknown, hidden parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span>.  This is done is through a process known as probabilistic inference.  What this basically means is, given that we know the general structure of how the documents are generated and we also know the words that are present in each document, can we work backwards and find the most likely parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span> that could have generated these documents?  The next section explains how this inference process is carried out for the LDA model.</p>
-<h2>Inference - Collapsed Gibbs Sampling</h2>
-<p>We want to know the latent parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span> which represent the topic distributions for each document, the word distributions for each topic and the topic assignments for each word respectively.  But the only information that we initially have is how many times each word appears in each document (LDA uses a bag-of-words approach).  So we need to infer these latent parameters from the observed data.  This means that we want to know <span class="math">\(P(\theta,\phi,Z|W)\)</span> which is known as the posterior distribution.  From the joint distribution shown above, the posterior distribution can be written as</p>
-<p><span class="math">\(P(\theta,\phi,Z) | W)=\frac{P(\theta,\phi,Z,W|\alpha,\beta)}{P(W|\alpha,\beta)}\)</span></p>
-<p>But it turns out that the denominator <span class="math">\(P(W|\alpha,\beta)\)</span> is intractable so we cannot compute the posterior is this usual way.  This tends to happen a lot in Bayesian inference, so there are a class of approximate inference methods that attempt to compute a distribution that is close to the actual posterior (but much easier to calculate).  In the case of LDA, the original paper by Blei et al. used variational inference to approximate the posterior.  But since then, collapsed Gibbs sampling (a MCMC inference technique) has been more commonly used to do this.  Before we get into the particular collapsed Gibbs sampling inference algorithm, it would be useful to have a quick review of Gibbs sampling and MCMC methods in general.</p>
-<h3>Gibbs Sampling</h3>
-<p>Gibbs sampling is part of a class of approximate inference methods known as Markov Chain Monte Carlo (MCMC) methods.  Generally speaking, MCMC methods work by creating a Markov Chain whose stationary distribution is the posterior distribution that we are looking for.  Consequently, if you simulate this Markov chain, eventually the state of the Markov chain will look like samples from the desired posterior distribution and given these samples you can get a good idea of what the posterior distribution looks like.  Gibbs sampling specifies a particular way of constructing this Markov chain. Say your target distribution is <span class="math">\(P(\textbf{x})=P(x_1,...,x_n)\)</span> but there is no closed form solution for <span class="math">\(P(\textbf{x})\)</span> (like our posterior distribution) so you cannot sample from it directly.  In Gibbs sampling, if you can sample from the conditional distribution <span class="math">\(P(x_i |x_{-i})\)</span>, a Markov chain can be constructed such that the samples from the conditionals converge to samples from the joint (i.e. the target distribution).    The Markov chain progresses as follows </p>
-<ol>
-<li>Randomly intialize the first sample <span class="math">\((x_1,...,x_n)\)</span></li>
-<li>For each cycle <span class="math">\(t\)</span> until convergence.<ol>
-<li>sample <span class="math">\(x_1^t\)</span> from <span class="math">\(P(x_1|x_2^{t-1},...,x_n^{t-1})\)</span></li>
-<li>sample <span class="math">\(x_2^t\)</span> from <span class="math">\(P(x_2|x_1^{t-1},x_3^{t-1},...,x_n^{t-1})\)</span></li>
-<li>continue until you sample <span class="math">\(x_n^t\)</span> from <span class="math">\(P(x_1|x_1^{t-1},...,x_{n-1}^{t-1})\)</span></li>
-</ol>
-</li>
-</ol>
-<p>So each cycle <span class="math">\(t\)</span> produces a new sample of <span class="math">\((x_1,...,x_n)\)</span>.  Eventually the Markov chain will converge and the samples will be very similar to those from the target distribution <span class="math">\(P(\textbf{x})\)</span>.</p>
-<h3>Collapsed Gibbs Sampling for LDA</h3>
-<p>Now let's return to LDA.  Before the collapsed Gibbs sampling procedure can be described, we must realize an important result.  Take an arbitrary parameter vector <span class="math">\(\theta_{i}\)</span> (i.e. the distribution over topics in document <span class="math">\(i\)</span>).  From the graphical model, we know that the topic assignments <span class="math">\(z_i\)</span> follow a multinomial distribution with a Dirichlet prior on <span class="math">\(\theta_i\)</span> .  These two distributions are conjugate pairs which means that that the posterior distribution of <span class="math">\(\theta_i\)</span> also follow a Dirichlet distribution <span class="math">\(Dir(\theta_i|n_i+\alpha)\)</span> (this is a standard result but you can find a <a href="http://en.wikipedia.org/wiki/Dirichlet_distribution#Conjugate_to_categorical.2Fmultinomial">short proof here</a>) where <span class="math">\(n_i\)</span> is the vector of word counts for document <span class="math">\(i\)</span>.  So, to get an estimate of <span class="math">\(\theta_i\)</span> we can take the expected value of this posterior distribution over <span class="math">\(\theta_i\)</span>.  By the definition of the expected value of a Dirichlet distribution, the estimate for <span class="math">\(\theta_{i,k}\)</span> (the proportion of topic <span class="math">\(k\)</span> in document <span class="math">\(i\)</span>) is 
-<div class="math">$$\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}$$</div>
-</p>
-<p>where <span class="math">\(n_i^k\)</span> is the number of words in document <span class="math">\(i\)</span> that have been assigned to topic <span class="math">\(k\)</span>.  And by the exact same argument, the estimate for <span class="math">\(\phi_{k,w}\)</span> (the proportion of word <span class="math">\(w\)</span> in topic <span class="math">\(k\)</span>) is </p>
-<p>
-<div class="math">$$\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}$$</div>
-</p>
-<p>where <span class="math">\(n_w^k\)</span> is the number of times word <span class="math">\(w\)</span> is assigned to topic <span class="math">\(k\)</span> (over all documents in the corpus).  So what is the significance of this?  The point is that both of these estimates <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> only depend on the topic assignments <span class="math">\(Z\)</span>.  Therefore, we are able to only focus on inferring the latent variable <span class="math">\(Z\)</span> and the other latent variables can be computed directly from <span class="math">\(Z\)</span>. This makes things much easier.</p>
-<p>We can infer the topic assignments <span class="math">\(Z\)</span> from the observed data using collapsed Gibbs sampling.  From the previous section on Gibbs sampling, we need to come up with a conditional distribution that is easy to sample from whose joint distribution is the posterior distribution that we are interested in.  The posterior distribution that we are interested in is <span class="math">\(P(Z|W)\)</span> which is the probability of all of the topic assignments given all of the observed words in all of the documents.  So the conditional that we need to sample from is <span class="math">\(P(z_i=j|z_{-i},w)\)</span>.  But we need to know the form of this distribution to make sure that we can easily sample from it.  So let's derive it. </p>
-<p>From Bayes' rule, </p>
-<p><span class="math">\(P(z_i=j|z_{-i},w) \propto P(w_i|z_i=j,z_{-i},w_{-i})P(z_i=j|z_{-i})\)</span></p>
-<p>Now let's focus on the left-most term.  We can marginalize over <span class="math">\(\phi\)</span> to get </p>
-<p><span class="math">\(P(w_i|z_i=j,z_{-i},w_{-i})=\int P(w_i | z_i=j,\phi_j)P(\phi_j |z_{-i},w_{-i})d\phi_j\)</span> </p>
-<p>Let's first look at the first term inside the integral.  Since we are conditioning on the <span class="math">\(\phi_j\)</span> parameters, <span class="math">\(P(w_i | z_i=j,\phi_j)=\phi_{w_i,j}\)</span>.  The second term inside the integral <span class="math">\(P(\phi_j |z_{-i},w_{-i})\)</span> is the posterior distribution of a multinomial likelihood combined with a Dirichlet prior (again!) which has a nice closed form solution that we have seen before.  After solving this integral (exact steps ommitted, but not difficult) we get </p>
-<p><span class="math">\(P(w_i|z_i=j,z_{-i},w_{-i})=\frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\)</span> </p>
-<p>Where <span class="math">\(n_{-i,j}^{w_i}\)</span> is the total number of <span class="math">\(w_i\)</span> instances assigned to topic <span class="math">\(j\)</span> not including the current <span class="math">\(w_i\)</span> and <span class="math">\(n_{-i,j}\)</span> is the total number of words assigned to topic <span class="math">\(j\)</span> not including the current word. As for the second term in the first equation <span class="math">\(P(z_i=j|z_{-i})\)</span> , we can follow the same general procedure.  First we marginalize over <span class="math">\(\theta_i\)</span> to get </p>
-<p><span class="math">\(P(z_i=j|z_{-i})=\int P(z_i=j|\theta_i)P(\theta_{d_i}|z_{-i})d\theta_{d_i}\)</span> </p>
-<p>And just as before, <span class="math">\(P(z_i=j|\theta_{d_i})=\theta_{d_{i},j}\)</span> and <span class="math">\(P(\theta_i|z_{-i})\)</span> is the posterior of a mutlinomial-Dirichlet conjugate pair.  The integral turns out to be </p>
-<p><span class="math">\(P(z_i=j|z_{-i})=\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}\)</span> </p>
-<p>where <span class="math">\(n_{-i,j}^{d_i}\)</span> is the number of words assigned to topic <span class="math">\(j\)</span> in document <span class="math">\(d_i\)</span> not counting the current one and <span class="math">\(n_{-i}^{d_i}\)</span> is the total number of words in document <span class="math">\(d_i\)</span>. Now let's put everything together to get our final conditional distribution for the Gibbs sampler. </p>
-<p>
-<div class="math">$$P(z_i=j|z_{-i},w) \propto \frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}$$</div>
-</p>
-<p>Then we carry out the Gibbs sampling procedure as usual to get samples from the posterior</p>
-<h2>Putting it all Together</h2>
-<p>Hopefully, at this point, all aspects of Latent Dirichlet Allocation are somewhat clear.  In terms of implementation, everything hinges on the Gibbs sampling inference step.  The topic assignments are initialized randomly.  Then the Gibbs procedure is run while keeping track of the required document and topic counts.  Once the sampling has converged, the document/topic distributions <span class="math">\(\theta\)</span> and topic/word distributions <span class="math">\(\phi\)</span> can be trivially computed from the learned topic assignments.  The following pseudocode outlines this process in greater detail. </p>
-<p><img alt="alt text" src="images/lda_algorithm.png" title="lda algorithm" /> </p>
-<p>And, as stated previously, these topic assignments can be used to compute the counts necessary to determine the other hidden variables <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span>. See <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Part II of this blog post</a> which explains how to translate this theory into Scala code.</p>
-<h3>Resources</h3>
-<ul>
-<li>The original Paper on LDA that uses variational inference instead of Gibbs sampling.  <a href="http://machinelearning.wustl.edu/mlpapers/paper_files/BleiNJ03.pdf">Latent Dirichlet Allocation - Blei, Ng, Jordan</a></li>
-<li>The original paper on collapsed Gibbs sampling for LDA.  <a href="http://psiexp.ss.uci.edu/research/papers/SteyversGriffithsLSABookFormatted.pdf">Probabilistic Topic Models - Griffiths, Steyvers</a></li>
-<li>Another nice technical report that shows much more detail than what I have shown.  <a href="http://http://www.arbylon.net/publications/text-est.pdf">Parameter Estimation for Text Analysis - Heinrich</a></li>
-</ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');
     mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
