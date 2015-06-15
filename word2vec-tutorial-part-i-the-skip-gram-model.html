@@ -97,12 +97,7 @@ Machine Learning at University College London. Natural language processing at Ve
 <div class="math">$$v_{queen}-v_{woman}+v_{man} \approx v_{king}$$</div>
 </p>
 <p>where <span class="math">\(v_{queen}\)</span>,<span class="math">\(v_{woman}\)</span>,<span class="math">\(v_{man}\)</span>, and <span class="math">\(v_{king}\)</span> are the word vectors for <span class="math">\(queen\)</span>, <span class="math">\(woman\)</span>, <span class="math">\(man\)</span>, and <span class="math">\(king\)</span> respectively.  These observations strongly suggest that word vectors encode valuable semantic information about the words that they represent. </p>
-<p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model - as well as the techniques used to compute these models efficiently. In total there will be three posts</p>
-<ol>
-<li>The Skip-Gram Model (this post).</li>
-<li><a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">The Continuous Bag-of-Words Model</a>.</li>
-<li>Techniques for Computational Efficiency (coming soon).</li>
-</ol>
+<p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model.</p>
 <p>Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent both of which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
 <h1>The Skip-Gram Model</h1>
 <p>Before we define the <em>skip-gram</em> model, it would be instructive to understand the format of the training data that it accepts.  The input of the <em>skip-gram</em> model is a single word <span class="math">\(w_I\)</span> and the output is the words in <span class="math">\(w_I\)</span>'s context <span class="math">\(\{w_{O,1},...,w_{O,C}\}\)</span> defined by a word window of size <span class="math">\(C\)</span>.  For example, consider the sentence <em>"I drove my car to the store"</em>.  A potential training instance could be the word "car" as an input and the words {"I","drove","my","to","the","store"} as outputs.  All of these words are <em>one-hot</em> encoded meaning they are vectors of length <span class="math">\(V\)</span> (the size of the vocabulary) with a value of <span class="math">\(1\)</span> at the index corresponding to the word and zeros in all other indexes.  As you can see, we are essentially <em>creating</em> training examples from plain text which means that we can have a virtually unlimited number of training examples at our disposal.</p>
@@ -166,7 +161,7 @@ E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
 <p>
 <div class="math">$$w^{(new)}_{ij} =w^{(old)}_{ij}- \eta \cdot \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_j$$</div>
 </p>
-<p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In a later post I will descibe two techniques - hierarchical softmax and negative sampling - which make this computation more efficient.</p>
+<p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In practice, computation techniques such as hierarchical softmax and negative sampling are used to make this computation more efficient.</p>
 <h2>References</h2>
 <ul>
 <li><a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></li>
