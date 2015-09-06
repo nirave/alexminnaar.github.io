@@ -30,7 +30,7 @@
 	      <div class="LaunchyardDetail"><p><a href="/"></a>
 <a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
 <br/>
-Machine Learning at University College London. Natural language processing at VerticalScope.
+Machine Learning at University College London. Research Engineer at Nitro.
 <br/>
 <br/>
 <a href="mailto:minnaaralex@gmail.com">Email</a><br />
@@ -43,7 +43,8 @@ Machine Learning at University College London. Natural language processing at Ve
 			<h3>Categories</h3>
 			<div align="left">
 			<ul>
-				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/nlp.html">Topic Modeling</a></li>
+                <li><a href="/tag/deep-learning.html">Deep Learning</a></li>
 				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
 				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
 				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
@@ -51,6 +52,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="implementing-distbelief-with-akka.html">Implementing the DistBelief Deep Neural Network Training Framework with Akka</a><br /><br />
                 <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
                 <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
                 <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
@@ -65,266 +67,6 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-05-18T00:00:00+02:00">
-          on&nbsp;Mon 18 May 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
-</div><!-- /.post-info --><p>In the <a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">previous post</a> the concept of word vectors was explained as was the derivation of the <em>skip-gram</em> model.  In this post we will explore the other <em>Word2Vec</em> model - the <em>continuous bag-of-words</em> (CBOW) model.  If you understand the <em>skip-gram</em> model then the <em>CBOW</em> model should be quite straight-forward because in many ways they are mirror images of each other.  For instance, if you look at the model diagram</p>
-<p><img alt="skip-gram model" src="images/cbow.png" /> </p>
-<p>it looks like the <em>skip-gram</em> model with the inputs and outputs reversed.  The input layer consists of the <em>one-hot</em> encoded input context words <span class="math">\(\{\mathbf{x_1},...,\mathbf{x_C}\}\)</span> for a word window of size <span class="math">\(C\)</span> and vocabulary of size <span class="math">\(V\)</span>.  The hidden layer is an N-dimensional vector <span class="math">\(\mathbf{h}\)</span>.  Finally, the output layer is output word <span class="math">\(\mathbf{y}\)</span> in the training example which is also <em>one-hot</em> encoded.  The <em>one-hot</em> encoded input vectors are connected to the hidden layer via a <span class="math">\(V \times N\)</span> weight matrix <span class="math">\(\mathbf{W}\)</span> and the hidden layer is connected to the output layer via a <span class="math">\(N \times V\)</span> wieght matrix <span class="math">\(\mathbf{W'}\)</span>.</p>
-<h1>Forward Propagation</h1>
-<p>We must first understand how the output is computed from the input (i.e. forward propagation).  The following assumes that we know the input and output weight matrices (I will explain how these are actually learned in the next section).  The first step is to evaluate the output of the hidden layer <span class="math">\(\mathbf{h}\)</span>.  This is computed by</p>
-<p>
-<div class="math">$$\mathbf{h}=\frac{1}{C} \mathbf{W} \cdot (\sum^C_{i=1} \mathbf{x_i})$$</div>
-</p>
-<p>which is the average of the input vectors weighted by the matrix <span class="math">\(\mathbf{W}\)</span>.  It is worth noting that this hidden layer output computation is one of the only differences between the <em>continuous bag-of-words</em> model and the <em>skip-gram</em> model (in terms of them being mirror images of course).  Next we compute the inputs to each node in the output layer</p>
-<p>
-<div class="math">$$u_j= \mathbf{v'_{w_j}}^T \cdot \mathbf{h}$$</div>
-</p>
-<p>where <span class="math">\(\mathbf{v'_{w_j}}\)</span> is the <span class="math">\(j^{th}\)</span> column of the output matrix <span class="math">\(\mathbf{W'}\)</span>.  And finally we compute the output of the output layer.  The output <span class="math">\(y_j\)</span> is obtained by passing the input <span class="math">\(u_j\)</span> throught the soft-max function.</p>
-<p>
-<div class="math">$$y_j=p(w_{y_j} | w_1,...,w_C)=\frac{\exp(u_j)}{\sum^V_{j'=1} \exp(u_j')}$$</div>
-</p>
-<p>Now that we know how forward propagation works we can learn the weight matrices <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>.  </p>
-<h1>Learning the Weight Matrices with Backpropagation</h1>
-<p>In the process of learning the wieght matrices <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>, we begin with randomly initialized values.  We then sequentially feed training examples into our model and observe the error which is some function of the difference between the expected output and the actual output.  We then compute the gradient of this error with respect to the elements of both weight matrices and correct them in the direction of this gradient.  This general optimization procedure is known as stochastic gradient descent (or sgd) but the method by which the gradients are derived is known as backpropagation.  </p>
-<p>The first step is to define the loss function.  The objective is to maximize the conditional probability of the output word given the input context, therefore our loss function will be</p>
-<p>
-<div class="math">$$\begin{align}
-E &amp;= -\log p(w_O | w_I) \\
-&amp;= -u_{j*} - \log \sum_{j'=1}^V \exp(u_{j'})  \\
-&amp;=- \mathbf{v_{w_O}}^T \cdot \mathbf{h} - \log \sum_{j'=1}^V \exp(\mathbf{v_{w_{j'}}}^T \cdot \mathbf{h}) 
-\end{align}$$</div>
-</p>
-<p>Where <span class="math">\(j^*\)</span> is the index of the the actual output word.  The next step is to derive the update equation for the hidden-output layer weights <span class="math">\(\mathbf{W'}\)</span>, then derive the weights for the input-hidden layer weights <span class="math">\(\mathbf{W}\)</span></p>
-<h2>Updating the hidden-output layer weights</h2>
-<p>The first step is to compute the derivative of the loss function <span class="math">\(E\)</span> with respect to the input to the <span class="math">\(j^{th}\)</span> node in the output layer <span class="math">\(u_j\)</span>.</p>
-<p>
-<div class="math">$$\frac{\partial{E}}{\partial{u_j}}=y_j - t_j$$</div>
-</p>
-<p>where <span class="math">\(t_j=1\)</span> if <span class="math">\(j=j^*\)</span> otherwise <span class="math">\(t_j=0\)</span>.  This is simply the prediction error of node <span class="math">\(j\)</span> in the output layer.  Next we take the derivative of <span class="math">\(E\)</span> with respect to the output weight <span class="math">\(w'_{ij}\)</span> using the chain rule.</p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial{E}}{\partial{w'_{ij}}} &amp;= \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{w'_{ij}}} \\
-&amp;= (y_j - t_j) \cdot h_i
-\end{align}$$</div>
-</p>
-<p>Now that we have the gradient with respect to an arbitrary output weight <span class="math">\(w'_{ij}\)</span>, we can define the stochastic gradient descent equation.</p>
-<p>
-<div class="math">$$w_{ij}^{'(new)}=w_{ij}^{'(old)} - \eta \cdot (y_j - t_j) \cdot h_i$$</div>
-</p>
-<p>or
-<div class="math">$$\mathbf{v'_{w_j}}^{(new)}=\mathbf{v'_{w_j}}^{(old)} - \eta \cdot (y_j - t_j) \cdot \mathbf{h}$$</div>
-</p>
-<p>where <span class="math">\(\eta&gt;0\)</span> is the learning rate. </p>
-<h2>Updating the input-hidden layer weights</h2>
-<p>Now let's try to derive a similar update equation for the input weights <span class="math">\(w_{ij}\)</span>.  The first step is to compute the derivative of <span class="math">\(E\)</span> with respect to an arbitrary hidden node <span class="math">\(h_i\)</span> (again using the chain rule).</p>
-<p>
-<div class="math">$$
-\begin{align}
-\frac{\partial{E}}{\partial{h_i}} &amp;= \sum^V_{j=1} \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{h_i}} \\
-&amp;= \sum^V_{j=1} (y_j - t_j) \cdot w'_{ij}
-\end{align}
-$$</div>
-</p>
-<p>where the sum is do to the fact that the hidden layer node <span class="math">\(h_i\)</span> is connected to each node of the output layer and therefore each prediction error must be incorporated.  The next step is to compute the derivative of <span class="math">\(E\)</span> with respect to an arbitrary input weight <span class="math">\(w_{ki}\)</span>.</p>
-<p>
-<div class="math">$$
-\begin{align}
-\frac{\partial{E}}{\partial{w_{ki}}} &amp;= \frac{\partial{E}}{\partial{h_i}} \cdot \frac{\partial{h_i}}{\partial{w_{ki}}}\\
- &amp;= \sum^V_{j=1} (y_j - t_j) \cdot w'_{ij} \cdot \frac{1}{C} \cdot x_k \\
- &amp; = \frac{1}{C}(\mathbf{x} \cdot EH)
-\end{align}
-$$</div>
-</p>
-<p>Where <span class="math">\(EH\)</span> is an N-dimensional vector of elements <span class="math">\(\sum^V_{j=1} (y_j - t_j) \cdot w'_{ij}\)</span> from <span class="math">\(i=1,...,N\)</span>.  However, since the inputs <span class="math">\(\mathbf{x}\)</span> are <em>one-hot</em> encoded, only one row of the <span class="math">\(N \times V\)</span> matrix <span class="math">\(\frac{1}{C}(\mathbf{x} \cdot EH)\)</span> will be nonzero.  Thus the final stochastic gradient descent equation for the input weights is</p>
-<p>
-<div class="math">$$\mathbf{v'_{w_{I,c}}}^{(new)}=\mathbf{v'_{w_{I,c}}}^{(old)} - \eta \cdot \frac{1}{C} \cdot EH$$</div>
-</p>
-<p>where <span class="math">\(w_{I,c}\)</span> is the <span class="math">\(c^{th}\)</span> word in the input context.</p>
-<h2>References</h2>
-<ul>
-<li><a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a></li>
-<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
-<li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-04-12T00:00:00+02:00">
-          on&nbsp;Sun 12 April 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
-</div><!-- /.post-info --><p>In many natural language processing tasks, words are often represented by their <em>tf-idf</em> scores.  While these scores give us some idea of a word's relative importance in a document, they do not give us any insight into its semantic meaning.  <em>Word2Vec</em> is the name given to a class of neural network models that, given an unlabelled training corpus, produce a vector for each word in the corpus that encodes its semantic information.  These vectors are usefull for two main reasons.</p>
-<ol>
-<li>We can measure the semantic similarity between two words are by calculating the cosine similarity between their corresponding word vectors.  </li>
-<li>We can use these word vectors as features for various supervised NLP tasks such as document classification, named entity recognition, and sentiment analysis.  The semantic information that is contained in these vectors make them powerful features for these tasks.</li>
-</ol>
-<p>You may ask <em>"how do we know that these vectors effectively capture the semantic meanings of the words?"</em>.  The answer is because the vectors adhere surprisingly well to our intuition.  For instance, words that we know to be synonyms tend to have similar vectors in terms of cosine similarity and antonyms tend to have dissimilar vectors.  Even more surprisingly, word vectors tend to obey the laws of analogy.  For example, consider the analogy <em>"Woman is to queen as man is to king"</em>.  It turns out that</p>
-<p>
-<div class="math">$$v_{queen}-v_{woman}+v_{man} \approx v_{king}$$</div>
-</p>
-<p>where <span class="math">\(v_{queen}\)</span>,<span class="math">\(v_{woman}\)</span>,<span class="math">\(v_{man}\)</span>, and <span class="math">\(v_{king}\)</span> are the word vectors for <span class="math">\(queen\)</span>, <span class="math">\(woman\)</span>, <span class="math">\(man\)</span>, and <span class="math">\(king\)</span> respectively.  These observations strongly suggest that word vectors encode valuable semantic information about the words that they represent. </p>
-<p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model.</p>
-<p>Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent both of which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
-<h1>The Skip-Gram Model</h1>
-<p>Before we define the <em>skip-gram</em> model, it would be instructive to understand the format of the training data that it accepts.  The input of the <em>skip-gram</em> model is a single word <span class="math">\(w_I\)</span> and the output is the words in <span class="math">\(w_I\)</span>'s context <span class="math">\(\{w_{O,1},...,w_{O,C}\}\)</span> defined by a word window of size <span class="math">\(C\)</span>.  For example, consider the sentence <em>"I drove my car to the store"</em>.  A potential training instance could be the word "car" as an input and the words {"I","drove","my","to","the","store"} as outputs.  All of these words are <em>one-hot</em> encoded meaning they are vectors of length <span class="math">\(V\)</span> (the size of the vocabulary) with a value of <span class="math">\(1\)</span> at the index corresponding to the word and zeros in all other indexes.  As you can see, we are essentially <em>creating</em> training examples from plain text which means that we can have a virtually unlimited number of training examples at our disposal.</p>
-<h2>Forward Propagation</h2>
-<p>Now let's define the <em>skip-gram</em> nerual network model as follows.</p>
-<p><img alt="skip-gram model" src="images/skip-gram.png" /> </p>
-<p>In the above model <span class="math">\(\mathbf{x}\)</span> represents the <em>one-hot</em> encoded vector corresponding to the input word in the training instance and <span class="math">\(\{\mathbf{y_1},...\mathbf{y_C}\}\)</span> are the <em>one-hot</em> encoded vectors corresponding to the output words in the training instance.  The <span class="math">\(V \times N\)</span> matrix <span class="math">\(\mathbf{W}\)</span> is the weight matrix between the input layer and hidden layer whose <span class="math">\(i^{th}\)</span> row represents the weights corresponding to the <span class="math">\(i^{th}\)</span> word in the vocabulary. This weight matrix <span class="math">\(\mathbf{W}\)</span> is what we are interested in learning because it contains the vector encodings of all of the words in our vocabulary (as its rows).  Each output word vector also has an associated <span class="math">\(N \times V\)</span> output matrix <span class="math">\(\mathbf{W'}\)</span>. There is also a hidden layer consisting of <span class="math">\(N\)</span> nodes (the exact size of <span class="math">\(N\)</span> is a training parameter).</p>
-<p>From my <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">previous blog post</a>, we know that the input to a unit in the hidden layer <span class="math">\(h_i\)</span> is simply the weighted sum of its inputs.  Since the input vector <span class="math">\(\mathbf{x}\)</span> is <em>one-hot</em> encoded, the weights coming from the nonzero element will be the only ones contributing to the hidden layer.  Therefore, for the input <span class="math">\(\mathbf{x}\)</span> with <span class="math">\(x_k=1\)</span> and <span class="math">\(x_{k'}=0\)</span> for all <span class="math">\(k' \neq k\)</span> the outputs of the hidden layer will be equivalent to the <span class="math">\(k^{th}\)</span> row of <span class="math">\(\mathbf{W}\)</span>.  Or mathematically,</p>
-<p>
-<div class="math">$$\mathbf{h}=\mathbf{x}^T \mathbf{W}=\mathbf{W}_{(k, .)} := \mathbf{v}_{w_I}$$</div>
-</p>
-<p>Notice that there is no activation function used here.  This is presumably because the inputs are bounded by the <em>one-hot</em> encoding.  In the same way, the inputs to each of the <span class="math">\(C \times V\)</span> output nodes is computed by the weighted sum of its inputs.  Therefore, the input to the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word is</p>
-<p>
-<div class="math">$$u_{c,j}=\mathbf{v'}_{w_j}^T \mathbf{h}$$</div>
-</p>
-<p>However we can also observe that the output layers for each output word share the same weights therefore <span class="math">\(u_{c,j}=u_j\)</span>.  We can finally compute the output of the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word via the <em>softmax</em> function which produces a multinomial distribution </p>
-<p>
-<div class="math">$$p(w_{c,j}=w_{O,c} | w_I)=y_{c,j}=\frac{exp(u_{c,j})}{\sum_{j'=1}^V exp(u_{j'})}$$</div>
-</p>
-<p>In plain english, this value is the probability that the output of the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word is equal to the actual value of the <span class="math">\(j^{th}\)</span> index of the <span class="math">\(c^{th}\)</span> output vector (which is <em>one-hot</em> encoded).</p>
-<h2>Learning the Weights with Backpropagation and Stochastic Gradient Descent</h2>
-<p>Now that we know how inputs are propograted forward through the network to produce outputs, we can derive the error gradients necessary for the backpropagation algorithm which we will use to learn both <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>.  The first step in deriving the gradients is defining a loss function.  This loss function will be</p>
-<p>
-<div class="math">$$\begin{align}
-E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
-&amp;= -\log \prod^C_{c=1} \frac{exp(u_{c,j^*_c})}{\sum^V_{j'=1} exp(u_j')} \\
-&amp;= -\sum^C_{c=1}u_{j^*_c} +C \cdot \log \sum^V_{j'=1} exp(u_{j'})
-\end{align}$$</div>
-</p>
-<p>which is simply the probability of the output words (the words in the input word's context) given the input word.  Here, <span class="math">\(j^*_c\)</span> is the index of the <span class="math">\(c^{th}\)</span> output word.  If we take the derivative with respect to <span class="math">\(u_{c,j}\)</span> we get</p>
-<p>
-<div class="math">$$\frac{\partial{E}}{\partial{u_{c,j}}}=y_{c,j}-t_{c,j}$$</div>
-</p>
-<p>where <span class="math">\(t_{c,j}=1\)</span> if the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> true output word is equal to <span class="math">\(1\)</span> (from its <em>one-hot</em> encoding), otherwise <span class="math">\(t_{c,j}=1\)</span>.  This is the prediction error for node <span class="math">\(c,j\)</span> (or the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word).</p>
-<p>Now that we have the error derivative with respect to inputs of the final layer, we can derive the derivative with respect to the output matrix <span class="math">\(\mathbf{W'}\)</span>.  Here we use the chain rule </p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial E}{\partial w'_{ij}} &amp;=\sum^C_{c=1} \frac{\partial E}{\partial u_{c,j}} \cdot \frac{\partial u_{c,j}}{\partial w'_{ij}} \\
-&amp;=\sum^C_{c=1} (y_{c,j}-t_{c,j}) \cdot h_i
-\end{align}$$</div>
-</p>
-<p>Therefore the gradient descent update equation for the output matrix <span class="math">\(\mathbf{W'}\)</span> is</p>
-<p>
-<div class="math">$$w'^{(new)}_{ij} =w'^{(old)}_{ij}- \eta \cdot \sum^C_{c=1} (y_{c,j}-t_{c,j}) \cdot h_i$$</div>
-</p>
-<p>Now we can derive the update equation for the input-hidden layer weights in <span class="math">\(\mathbf{W}\)</span>.  Let's start by computing the error derivative with respect to the hidden layer.</p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial{E}}{\partial{h_i}} &amp;=\sum^V_{j=1} \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{h_i}}  \\
-&amp;=\sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij}
-\end{align}$$</div>
-</p>
-<p>Now we are able to compute the derivative with respect to <span class="math">\(\mathbf{W}\)</span></p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial{E}}{\partial{w_{ki}}} &amp;=\frac{\partial{E}}{\partial{h_i}} \cdot \frac{\partial{h_i}}{\partial{w_{ki}}} \\
-&amp;= \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_k
-\end{align}$$</div>
-</p>
-<p>and finally we arrive at our gradient descent equation for our input weights</p>
-<p>
-<div class="math">$$w^{(new)}_{ij} =w^{(old)}_{ij}- \eta \cdot \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_j$$</div>
-</p>
-<p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In practice, computation techniques such as hierarchical softmax and negative sampling are used to make this computation more efficient.</p>
-<h2>References</h2>
-<ul>
-<li><a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></li>
-<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
-<li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
         
         
 
@@ -895,6 +637,428 @@ Topic 5: disparity, binding, similarity, protein, structural, clause, instructio
 <li><a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CB8QFjAA&amp;url=https%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiBach2010b.pdf&amp;ei=Py88VJfcPIaeyASvkIDoCg&amp;usg=AFQjCNHLmU8Gk_P4usBj2QcGcaolw87w4w&amp;sig2=9dw5H6mIdznjjumz2nCY1g&amp;bvm=bv.77161500,d.aWw">Online Learning for Latent Dirichlet Allocation.  Hoffman, Blei, Bach.</a></li>
 <li><a href="https://www.google.ca/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;cad=rja&amp;uact=8&amp;ved=0CCQQFjAA&amp;url=http%3A%2F%2Fwww.cs.princeton.edu%2F~blei%2Fpapers%2FHoffmanBleiWangPaisley2013.pdf&amp;ei=ci88VIuwKof5yAS2i4II&amp;usg=AFQjCNFDdMC1UFSKbIMPm8PSFWsuqnl4qg&amp;sig2=wxaruB5M5pLC5Tc_3QgxrA&amp;bvm=bv.77161500,d.aWw">Stochastic Variational Inference. Hoffman, Blei, Wang, Paisley.</a></li>
 <li><a href="http://msc-ai-thesis-christiaan-meijer.googlecode.com/svn-history/trunk/Literature/Amari%20-%20Natural%20Gradient%20works%20efficiently%20in%20learning.pdf">Natural Gradient Works Efficiently in Learning. Amari.</a></li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-08-10T00:00:00+02:00">
+          on&nbsp;Sun 10 August 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><p>The theory behind Latent Dirichlet Allocation was outlined in the the <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">previous blog post</a>.  Now the goal is to translate this theory into a fully-fledged Scala application.  There are two main entities in the LDA algorithm</p>
+<ol>
+<li><strong>The Corpus:</strong>  This is the collection of documents.  Functionality is needed to accept documents from the user, create a vocabulary, perform text preprocessing, maintain document-level and corpus-level word counts, and returning the desired output back to the user.</li>
+<li><strong>Inference:</strong>  The core aspect of this algorithm is the collapsed Gibbs sampling inference step.  This must be implemented efficiently and correctly.</li>
+</ol>
+<h2>The Corpus</h2>
+<h3>Getting a vocabulary</h3>
+<p>The first task that the corpus class must undertake is getting a vocabulary from the given documents.  Stop words must be removed and we also want to remove low-frequency words (these words would most likely not show up in any topics anyway so it is best to remove them for memory-management reasons).  The low-frequency cut-off threshold should be supplied by the user.  In order to determine the low-frequency words, a corpus-wide word count must be performed.  Also, it is good practice to remove stop words and words that are either too short or too long.  The following <code>CountVocab</code> class performs the required word count, then removes words that are too infrequent, are part of a stop word list, or are not within the allowable length bounds.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">CountVocab</span><span class="o">(</span><span class="n">filePath</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">minCount</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Vocabulary</span> <span class="o">{</span>
+
+  <span class="k">val</span> <span class="n">stopWords</span> <span class="k">=</span> <span class="nc">Source</span><span class="o">.</span><span class="n">fromURL</span><span class="o">(</span><span class="n">getClass</span><span class="o">.</span><span class="n">getResource</span><span class="o">(</span><span class="s">&quot;/english_stops_words.txt&quot;</span><span class="o">)).</span><span class="n">mkString</span><span class="o">.</span><span class="n">split</span><span class="o">(</span><span class="s">&quot;\n&quot;</span><span class="o">).</span><span class="n">toSet</span>
+
+  <span class="k">def</span> <span class="n">getVocabulary</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">var</span> <span class="n">vocabulary</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="nc">HashMap</span><span class="o">.</span><span class="n">empty</span>
+    <span class="k">var</span> <span class="n">wordCounter</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="nc">HashMap</span><span class="o">.</span><span class="n">empty</span>
+
+    <span class="k">def</span> <span class="n">countWords</span><span class="o">(</span><span class="n">docFile</span><span class="k">:</span> <span class="kt">File</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">tokens</span> <span class="k">=</span> <span class="nc">StanfordTokenizer</span><span class="o">.</span><span class="n">tokenizeFile</span><span class="o">(</span><span class="n">docFile</span><span class="o">)</span>
+
+      <span class="k">for</span> <span class="o">(</span><span class="n">token</span> <span class="k">&lt;-</span> <span class="n">tokens</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">wordCounter</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">wordCounter</span> <span class="o">+=</span> <span class="o">(</span><span class="n">token</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">wordCounter</span><span class="o">(</span><span class="n">token</span><span class="o">)</span> <span class="o">+</span> <span class="mi">1</span><span class="o">))</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="k">if</span> <span class="o">(!</span><span class="n">stopWords</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span><span class="n">token</span><span class="o">.</span><span class="n">matches</span><span class="o">(</span><span class="s">&quot;\\p{Punct}&quot;</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="n">token</span><span class="o">.</span><span class="n">length</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">&amp;&amp;</span> <span class="n">token</span><span class="o">.</span><span class="n">length</span> <span class="o">&lt;</span> <span class="mi">15</span> <span class="o">&amp;&amp;</span> <span class="n">token</span> <span class="o">!=</span> <span class="s">&quot;-lrb-&quot;</span> <span class="o">&amp;&amp;</span> <span class="n">token</span> <span class="o">!=</span> <span class="s">&quot;-rrb-&quot;</span><span class="o">)</span> <span class="o">{</span>
+          <span class="n">wordCounter</span> <span class="o">+=</span> <span class="o">(</span><span class="n">token</span> <span class="o">-&gt;</span> <span class="mi">1</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">filePath</span><span class="o">).</span><span class="n">listFiles</span><span class="o">.</span><span class="n">toIterator</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">isFile</span><span class="o">).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">docFile</span> <span class="k">=&gt;</span> <span class="n">countWords</span><span class="o">(</span><span class="n">docFile</span><span class="o">))</span>
+
+    <span class="k">for</span> <span class="o">((</span><span class="n">w</span><span class="o">,</span> <span class="n">freq</span><span class="o">)</span> <span class="k">&lt;-</span> <span class="n">wordCounter</span><span class="o">)</span> <span class="o">{</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">freq</span> <span class="o">&gt;=</span> <span class="n">minCount</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">vocabulary</span> <span class="o">+=</span> <span class="o">(</span><span class="n">w</span> <span class="o">-&gt;</span> <span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span><span class="o">)</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="n">vocabulary</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The above function takes a file path as an input parameter that points to the directory containing the documents (in text file format) on which you are going to perform LDA.  It also takes a frequency threshold parameter, below which a word is deemed too infrequent to be useful.  There is a nested function that performs a word count on the important words (tokenized with the Stanford coreNLP tokenizer), then we iterate through the counted words and keep the ones above the frequency threshold.  Also, we create a hashmap where every word we keep is mapped to a unique integer ID which will be used later.</p>
+<h3>Keeping Track of the Topic Assignment Counts</h3>
+<p>From <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I</a>, we learned that the probabilities that we are interested in are dependent upon the topics that are assigned to each word in the corpus.  During the Gibbs sampling procedure, the topic assignments are constantly being updated and the conditional distribution that is being sampled from also needs to be updated to reflect the new topic assignments.  Therefore, we need a way of keeping tack of these topic assignment counts.  This will be done with two matrices (using the <a href="https://github.com/scalanlp/breeze">Breeze</a> linear algebra library) - a topic/word matrix that counts how many times each word is assigned to each topic, and a document/topic matrix that counts how many words each topic is assigned to in each document.  Furthermore, we need to initialize the Gibbs sampling procedure by randomly assigning each word to a topic.  This is all done in the following <code>CollapsedLDACorpus</code> class.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">CollapsedLDACorpus</span><span class="o">(</span><span class="n">vocab</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">String</span>, <span class="kt">Int</span><span class="o">],</span> <span class="n">numTopics</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">docDirectory</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Corpus</span> <span class="o">{</span>
+
+  <span class="k">val</span> <span class="n">numDocs</span> <span class="k">=</span> <span class="nc">DocUtils</span><span class="o">.</span><span class="n">numDocs</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">)</span>
+  <span class="k">val</span> <span class="n">vocabulary</span> <span class="k">=</span> <span class="n">vocab</span>
+  <span class="k">var</span> <span class="n">docTopicMatrix</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numDocs</span><span class="o">,</span> <span class="n">numTopics</span><span class="o">)</span>
+  <span class="k">var</span> <span class="n">topicWordMatrix</span> <span class="k">=</span> <span class="nc">DenseMatrix</span><span class="o">.</span><span class="n">zeros</span><span class="o">[</span><span class="kt">Double</span><span class="o">](</span><span class="n">numTopics</span><span class="o">,</span> <span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span><span class="o">)</span>
+  <span class="k">var</span> <span class="n">words</span><span class="k">:</span> <span class="kt">Vector</span><span class="o">[</span><span class="kt">Word</span><span class="o">]</span> <span class="k">=</span> <span class="nc">Vector</span><span class="o">.</span><span class="n">empty</span>
+
+  <span class="k">val</span> <span class="n">randomTopicGenerator</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Random</span>
+  <span class="k">var</span> <span class="n">docIndex</span> <span class="k">=</span> <span class="mi">0</span>
+
+  <span class="k">def</span> <span class="n">processDoc</span><span class="o">(</span><span class="n">contents</span><span class="k">:</span> <span class="kt">String</span><span class="o">)</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">tokens</span> <span class="k">=</span> <span class="nc">StanfordTokenizer</span><span class="o">.</span><span class="n">tokenizeString</span><span class="o">(</span><span class="n">contents</span><span class="o">)</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">token</span> <span class="k">&lt;-</span> <span class="n">tokens</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">randTopic</span> <span class="k">=</span> <span class="n">randomTopicGenerator</span><span class="o">.</span><span class="n">nextInt</span><span class="o">(</span><span class="n">numTopics</span><span class="o">)</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="c1">//Assign the word to a random topic</span>
+        <span class="n">words</span> <span class="o">:+=</span> <span class="nc">Word</span><span class="o">(</span><span class="n">token</span><span class="o">,</span> <span class="n">docIndex</span><span class="o">,</span> <span class="n">randTopic</span><span class="o">)</span>
+        <span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">docIndex</span><span class="o">,</span> <span class="n">randTopic</span><span class="o">)</span> <span class="o">+=</span> <span class="mf">1.0</span>
+        <span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">randTopic</span><span class="o">,</span> <span class="n">vocabulary</span><span class="o">(</span><span class="n">token</span><span class="o">))</span> <span class="o">+=</span> <span class="mf">1.0</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+    <span class="n">docIndex</span> <span class="o">+=</span> <span class="mi">1</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">initialize</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">new</span> <span class="nc">File</span><span class="o">(</span><span class="n">docDirectory</span><span class="o">).</span><span class="n">listFiles</span><span class="o">.</span><span class="n">toIterator</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="k">_</span><span class="o">.</span><span class="n">getName</span><span class="o">.</span><span class="n">endsWith</span><span class="o">(</span><span class="s">&quot;.txt&quot;</span><span class="o">)).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">docFile</span> <span class="k">=&gt;</span> <span class="n">processDoc</span><span class="o">(</span><span class="n">fromFile</span><span class="o">(</span><span class="n">docFile</span><span class="o">).</span><span class="n">getLines</span><span class="o">().</span><span class="n">mkString</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">reverseVocab</span><span class="k">:</span> <span class="kt">HashMap</span><span class="o">[</span><span class="kt">Int</span>, <span class="kt">String</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="n">vocabulary</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="k">_</span> <span class="n">swap</span><span class="o">)</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>There is also an <code>processDoc</code> function that assigns each word in the document (that is in the vocabulary) to a random topic and increments the corresponding entries <code>docTopicMatrix</code> and <code>topicWordMatrix</code>.  The topic assignments are assigned within objects of a case class called <code>Word</code> that maintains the state of each word.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="k">class</span> <span class="nc">Word</span><span class="o">(</span><span class="n">token</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">doc</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="k">var</span> <span class="n">topic</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
+</pre></div>
+
+
+<p>The state of a word is its assigned topic, the document that it appears in, and the actual string value of the word itself.</p>
+<h2>Inference</h2>
+<p>The collapsed Gibbs sampling inference algorithm was described in detail in <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I of this blog post</a>.  In short, topic assignments are repeatedly sampled from a conditional distribution and after enough samples have been performed, it is assumed that the samples are taken from the posterior distribution over topic assignments.  Then, the <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> probabilities can be computed from these inferred topic assignments.  The following <code>collapsedGibbs</code> class performs this these tasks.</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">CollapsedGibbs</span><span class="o">(</span><span class="n">corpus</span><span class="k">:</span> <span class="kt">CollapsedLDACorpus</span><span class="o">,</span> <span class="n">docDirectory</span><span class="k">:</span> <span class="kt">String</span><span class="o">,</span> <span class="n">vocabThreshold</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">K</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">alpha</span><span class="k">:</span> <span class="kt">Double</span><span class="o">,</span> <span class="n">beta</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">TopicModel</span> <span class="o">{</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * For a given word, calculate the conditional distribution over topic assignments to be sampled from.</span>
+<span class="cm">   * @param word word whose topic will be inferred from the Gibb&#39;s sampler.</span>
+<span class="cm">   * @return distribution over topics for the word input.</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">gibbsDistribution</span><span class="o">(</span><span class="n">word</span><span class="k">:</span> <span class="kt">Word</span><span class="o">)</span><span class="k">:</span> <span class="kt">Multinomial</span><span class="o">[</span><span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>, <span class="kt">Int</span><span class="o">]</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">val</span> <span class="n">docTopicRow</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span>
+    <span class="k">val</span> <span class="n">topicWordCol</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(::,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span>
+    <span class="k">val</span> <span class="n">topicSums</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">,</span> <span class="nc">Axis</span><span class="o">.</span><span class="n">_1</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">params</span> <span class="k">=</span> <span class="o">(</span><span class="n">docTopicRow</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">)</span> <span class="o">:*</span> <span class="o">(</span><span class="n">topicWordCol</span> <span class="o">+</span> <span class="n">beta</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">topicSums</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">beta</span><span class="o">)</span>
+
+    <span class="c1">//normalize parameters</span>
+    <span class="k">val</span> <span class="n">normalizingConstant</span> <span class="k">=</span> <span class="n">sum</span><span class="o">(</span><span class="n">params</span><span class="o">)</span>
+    <span class="k">val</span> <span class="n">normalizedParams</span> <span class="k">=</span> <span class="n">params</span> <span class="o">:/</span> <span class="n">normalizingConstant</span>
+
+    <span class="nc">Multinomial</span><span class="o">(</span><span class="n">normalizedParams</span><span class="o">)</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Gibbs sampler for LDA</span>
+<span class="cm">   * @param numIter number of iterations that Gibbs sampler will be run</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">gibbsSample</span><span class="o">(</span><span class="n">numIter</span><span class="k">:</span> <span class="kt">Int</span> <span class="o">=</span> <span class="mi">200</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">iter</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numIter</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="n">println</span><span class="o">(</span><span class="n">iter</span><span class="o">)</span>
+
+      <span class="k">for</span> <span class="o">(</span><span class="n">word</span> <span class="k">&lt;-</span> <span class="n">corpus</span><span class="o">.</span><span class="n">words</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">multinomialDist</span> <span class="k">=</span> <span class="n">gibbsDistribution</span><span class="o">(</span><span class="n">word</span><span class="o">)</span>
+
+        <span class="k">val</span> <span class="n">oldTopic</span> <span class="k">=</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span>
+
+        <span class="c1">//reassign word to topic determined by sample</span>
+        <span class="n">word</span><span class="o">.</span><span class="n">topic</span> <span class="k">=</span> <span class="n">multinomialDist</span><span class="o">.</span><span class="n">draw</span><span class="o">()</span>
+
+        <span class="c1">//If topic assignment has changed, must also change count matrices</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">oldTopic</span> <span class="o">!=</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">)</span> <span class="o">{</span>
+
+          <span class="c1">//increment counts to due to reassignment to new topic</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span> <span class="o">+=</span> <span class="mf">1.0</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="n">word</span><span class="o">.</span><span class="n">topic</span><span class="o">)</span> <span class="o">+=</span> <span class="mf">1.0</span>
+
+          <span class="c1">//decrement counts of old topic assignment that has been changed</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">oldTopic</span><span class="o">,</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">token</span><span class="o">))</span> <span class="o">-=</span> <span class="mf">1.0</span>
+          <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">word</span><span class="o">.</span><span class="n">doc</span><span class="o">,</span> <span class="n">oldTopic</span><span class="o">)</span> <span class="o">-=</span> <span class="mf">1.0</span>
+
+        <span class="o">}</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Calculate theta matrix directly from doc/topic counts.  Overwrite counts matrix to save memory.</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">getTheta</span> <span class="o">{</span>
+
+    <span class="c1">//we turn the counts matrix into a probability matrix</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">doc</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">corpus</span><span class="o">.</span><span class="n">numDocs</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">countToProb</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">((</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::)</span> <span class="o">+</span> <span class="n">alpha</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">)</span> <span class="o">+</span> <span class="n">K</span> <span class="o">*</span> <span class="n">alpha</span><span class="o">)).</span><span class="n">t</span>
+      <span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">doc</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">countToProb</span><span class="o">.</span><span class="n">t</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Calculate phi matric directly from topic/word counts.  Overwrite counts matrix to save memory.</span>
+<span class="cm">   */</span>
+  <span class="k">private</span><span class="o">[</span><span class="kt">this</span><span class="o">]</span> <span class="k">def</span> <span class="n">getPhi</span> <span class="o">{</span>
+
+    <span class="c1">//we turn the counts matrix into a probability matrix</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">topic</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">K</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">countToProb</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="o">((</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::)</span> <span class="o">+</span> <span class="n">beta</span><span class="o">)</span> <span class="o">/</span> <span class="o">(</span><span class="n">sum</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">)</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">size</span> <span class="o">*</span> <span class="n">beta</span><span class="o">)).</span><span class="n">t</span>
+      <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::)</span> <span class="o">:=</span> <span class="n">countToProb</span><span class="o">.</span><span class="n">t</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Perform all inference steps - gibbs sampling, calculating theta matrix, calculating phi matrix.</span>
+<span class="cm">   */</span>
+  <span class="k">def</span> <span class="n">inference</span> <span class="o">{</span>
+    <span class="n">gibbsSample</span><span class="o">()</span>
+    <span class="n">getTheta</span>
+    <span class="n">getPhi</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * Print topics found by LDA algorithm.</span>
+<span class="cm">   * @param numWords Determines how many words to display for each topic.</span>
+<span class="cm">   */</span>
+  <span class="k">def</span> <span class="n">printTopics</span><span class="o">(</span><span class="n">numWords</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="c1">//want to actually show the words, so we need to extract strings from ids</span>
+    <span class="k">val</span> <span class="n">revV</span> <span class="k">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">reverseVocab</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">topic</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">K</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+      <span class="c1">//tie probability to column index, then sort by probabiltiy, take the top numWords, map column index to corresponding word</span>
+      <span class="n">println</span><span class="o">(</span><span class="s">&quot;Topic #&quot;</span> <span class="o">+</span> <span class="n">topic</span> <span class="o">+</span> <span class="s">&quot;:  &quot;</span> <span class="o">+</span> <span class="n">corpus</span><span class="o">.</span><span class="n">topicWordMatrix</span><span class="o">(</span><span class="n">topic</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">sortBy</span><span class="o">(-</span><span class="k">_</span><span class="o">.</span><span class="n">_1</span><span class="o">).</span><span class="n">take</span><span class="o">(</span><span class="n">numWords</span><span class="o">).</span><span class="n">toList</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">revV</span><span class="o">(</span><span class="n">x</span><span class="o">.</span><span class="n">_2</span><span class="o">)))</span>
+
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="cm">/**</span>
+<span class="cm">   * For a given document, display most likely topics occurring in it.</span>
+<span class="cm">   * @param docIndex index of document to be analyzed.</span>
+<span class="cm">   * @param probCutoff Determines how likely a topic has to be for it to be displayed.</span>
+<span class="cm">   */</span>
+  <span class="k">def</span> <span class="n">printTopicProps</span><span class="o">(</span><span class="n">docIndex</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">probCutoff</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="c1">//tie probability to column index, filter probabilities by probCutoff</span>
+    <span class="n">println</span><span class="o">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">docTopicMatrix</span><span class="o">(</span><span class="n">docIndex</span><span class="o">,</span> <span class="o">::).</span><span class="n">t</span><span class="o">.</span><span class="n">toArray</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">filter</span><span class="o">(</span><span class="n">x</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">_1</span> <span class="o">&gt;</span> <span class="n">probCutoff</span><span class="o">).</span><span class="n">toList</span><span class="o">)</span>
+
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The full inference procedure is performed in the <code>inference</code> method. First the Gibbs sampling procedure is performed.  This is done by iterating over each word in the corpus and during each iteration, the conditional probability distribution over all topics for that word is calculated with the following equation from <a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">part I</a>,</p>
+<p>
+<div class="math">$$P(z_i=j|z_{-i},w) \propto \frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}$$</div>
+</p>
+<p>This is done in the method called <code>gibbsDistribution</code>.  The distribution is returned as a Multinomial distribution (see the scaladocs for <a href="http://www.scalanlp.org/api/breeze/#breeze.stats.distributions.package">Breeze Multinomial distribution</a>).  Then a new topic is sampled from this multinomial distribution and assigned to the word object.  And finally, the doc/topic and topic/word counts are updated to reflect this new assignment (where the word ID from vocabulary is used to associate words with columns in the topic/word matrix).  This sampling procedure runs for 10,000 iterations (so that we can be sure that MCMC convergence has occurred).  The next step in <code>inference</code> is to calculate the <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> probability matrices.  This is done using the count matrices and the following equations from part I,</p>
+<p><span class="math">\(\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}\)</span> and <span class="math">\(\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}\)</span></p>
+<p>The count matrices are transformed into probability matrices in place to save on memory.  The <code>printTopics</code> method prints the topics found from the <span class="math">\(\theta\)</span> matrix in terms of the most likely words for each topic.  The <code>printTopicProps</code> method prints the most likely topics for a particular document within the corpus from the <span class="math">\(\phi\)</span> matrix.</p>
+<p>Hopefully this series of blog posts has shed some light on some of the mysteries of Latent Dirichlet Allocation.  The above code snippets were taken from my Scala implementation that you can find at my <a href="https://github.com/alexminnaar/ScalaTopicModels">ScalaTopicModels github repo</a>.</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/latent-dirichlet-allocation-in-scala-part-i-the-theory.html">Latent Dirichlet Allocation in Scala Part I - The Theory</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2014-06-22T00:00:00+02:00">
+          on&nbsp;Sun 22 June 2014
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/bayesian-inference.html">   Bayesian Inference</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><p>I wanted to write a two-part blog post on Latent Dirichlet Allocation.  When I was first learning about this algorithm I became somewhat frustrated because it seemed that many learning resources either explained the theory behind Latent Dirichlet Allocation or provided code but none actually explained the connection between the two.  In other words, it was difficult for me to identify the various aspects of the theory behind Latent Dirichlet Allocation algorithm in the code itself.  So the goal of these two blog posts is to both explain the theory behind Latent Dirichlet Allocation and specifically how that theory can be transformed into implementable code.  In this case, I will be using the Scala programming language because that is what I am currently working with professionally.</p>
+<p>This first blog entry will focus on the theory behind LDA and the <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">next post</a> will focus on its transformation into implementable code.</p>
+<h2>Why Learn about Latent Dirichlet Allocation (LDA)?</h2>
+<p>There are many reasons to want to learn about LDA such as</p>
+<ol>
+<li>What it does is very useful.  Given a set of documents, it assigns to each topic a distribution over words and to each document a distribution over topics in a completely unsupervised way.  So essentially, it is a way to figure out what each document in a set of documents is about without having to actually read them!  For that reason, it is a great tool to use for a multitude of text categorization tasks.</li>
+<li>It is a great practical example of Bayesian inference.  If you are looking to improve your understand Bayesian inference, understanding LDA would definitely help with this.</li>
+</ol>
+<h2>Probability Distributions involved in LDA</h2>
+<p>The two probability distributions used in LDA are the multinomial distribution and the Dirichlet distribution.</p>
+<h3>The Multinomial Distribution</h3>
+<p>The multinomial distribution models the histogram of outcomes of an experiment with <span class="math">\(k\)</span> possible outcomes that is performed <span class="math">\(T\)</span> times.  The parameters of this distribution are the probabilities of each of the <span class="math">\(k\)</span> possible outcomes occurring in a single trial, <span class="math">\(p_1,...,p_k\)</span>.  This is a discrete, multi-variate distribution with probability mass function</p>
+<p><span class="math">\(P(x_1,...,x_k |T,p_1,...,p_k)=\frac{T!}{\prod_{i=1}^kx_i!}p_i^{x_i}\)</span> where <span class="math">\(x_i \geq 0\)</span></p>
+<p>A good example of how the multinomial distribution is used is to think of rolling a dice several times.  Say you want to know the probability of rolling 3 fours, 2 sixes, and 4 ones in 9 total rolls given that you know the probability of landing on each side of the dice.  The multinomial distribution models this probability.</p>
+<h3>The Dirichlet Distribution</h3>
+<p>It is obvious from its name that the Dirichlet distribution is involved in Latent Dirichlet Allocation.  The Dirichlet distribution is sometimes difficult to understand because it deals with distributions over the probability simplex.  What this means is that the Dirichlet distribution is a distribution over discrete probability distributions.  Its probability mass function is</p>
+<p><span class="math">\(P(P=\{p_i\}|\alpha_i)=\frac{\prod_i \Gamma(\alpha_i)}{\Gamma(\sum_i \alpha_i)}\prod_ip_i^{\alpha_i-1}\)</span>  where <span class="math">\(\sum_ip_i=1\)</span> and <span class="math">\(p_i \geq 0\)</span></p>
+<p>The key to understanding the Dirichlet distribution is realizing that instead of it being a distribution over events or counts (as most probability distributions are), it is a distribution over discrete probability distributions (eg. multinomials).</p>
+<p>Another important note is that the Dirichlet distribution is the conjugate prior to the multinomial distribution.  This means that the posterior distribution for a multinomial likelihood with a Dirichlet prior over its parameters is also a Dirichlet distribution.  In fact, the posterior is the following Dirichlet distribution</p>
+<p><span class="math">\(P(p_1,...,p_k|x_1,...x_k)=\frac{\prod_i \Gamma(\alpha_i+x_i)}{\Gamma(N+\sum_i \alpha_i)}\prod_ip_i^{\alpha_i+x_i-1}\)</span></p>
+<p>The proof is not shown here but it can be derived by multiplying the multinomial likelihood with the Dirichlet prior in a straight-forward way.</p>
+<h2>The LDA Generative Model</h2>
+<p>LDA uses what is called a generative model as a means to explain how the observed words in a corpus are generated from an underlying latent structure.  The following picture shows how this generative model works.</p>
+<p><img alt="alt text" src="images/smoothed_lda.png" title="lda graphical model" /> </p>
+<p>This may look complicated at first but every part of this model can be explained. Node <span class="math">\(w\)</span> represents the observed words in the corpus.  It is shaded to indicate that it is observed and not a latent variable.  But before we explore the other nodes in the model, the intuition behind the generative model should be explained.  LDA makes the assumption that a document in a corpus is a distribution over topics and a topic is a distribution over words.  So given a distribution over topics for a particular document, the actual words that appear in the document are generated by first sampling a topic from the distribution over topics then sampling a word from the sampled topic which is itself a distribution over words.  This is a somewhat natural way to think about documents.  A document can contain several different topics with varying proportions and some words are more associated with some topics than others.</p>
+<p>Now let's get back into the generative model.  Instead of starting with <span class="math">\(w\)</span> the observed word node, let's start at the outside.  Both <span class="math">\(\beta\)</span> and <span class="math">\(\alpha\)</span> are each parameters of two separate Dirichlet distributions which are represented by the two outer nodes in the generative model.  These two Dirichlet distributions are priors for two multinomial distributions which are parameterized by <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> where <span class="math">\(Multinomial(\theta)\)</span> is the distribution over topics for a given document and <span class="math">\(Multinomial(\phi)\)</span> is the distribution over words for a given topic.  And since there are <span class="math">\(K\)</span> topics and <span class="math">\(M\)</span> documents, there are <span class="math">\(M\)</span> <span class="math">\(\theta\)</span> vectors, each of which are <span class="math">\(K\)</span> elements in length.  Similarly, since there are <span class="math">\(N\)</span> unique words in the corpus, there are <span class="math">\(K\)</span> <span class="math">\(\phi\)</span> vectors, each of which are <span class="math">\(N\)</span> elements in length.  A good way to think of these parameters is as two matrices.</p>
+<p><img alt="alt text" src="images/theta.png" title="theta" /> </p>
+<p><img alt="alt text" src="images/phi.png" title="phi" /> </p>
+<p>Where each row is a parameterization of a multinomial distribution.  It also probably important to note that in the previous section the multinomial distribution was said to have a parameter <span class="math">\(T\)</span> representing the number of trials.  In the case of LDA, <span class="math">\(T=1\)</span> (sometimes this is called a categorical distribution rather than a multinomial distribution).  And finally, <span class="math">\(Z\)</span> is the topic assigned to word <span class="math">\(w\)</span>.</p>
+<p>So, in summary, the generative process is the following.</p>
+<ol>
+<li>All of the Multinomical parameter vectors for all documents <span class="math">\(\theta\)</span> are each sampled from <span class="math">\(Dir(\alpha)\)</span>.</li>
+<li>The other Mutlinomial parameter vectors for all topics <span class="math">\(\phi\)</span> are each sampled from <span class="math">\(Dir(\beta)\)</span>.</li>
+<li>The for each word index <span class="math">\(n\)</span> in document <span class="math">\(i\)</span> where <span class="math">\(i \in \{1,...,M\}\)</span>.<ol>
+<li>The topic assignment for <span class="math">\(n\)</span>, <span class="math">\(z_{n,i}\)</span> is sampled from the Multinomial distribution with parameter <span class="math">\(\theta_i\)</span> corresponding to document <span class="math">\(i\)</span>.</li>
+<li>The word with index <span class="math">\(n\)</span> is sampled from the Multinomial distributinon with parameter determined from the topic that was sampled in the last step <span class="math">\(\phi_{z_n,i}\)</span>.</li>
+</ol>
+</li>
+</ol>
+<p>And given the above graphical model, it is straight-forward to show that the joint distribution is</p>
+<p><span class="math">\(P(\theta,\phi,Z,W|\alpha,\beta)=\prod_{j=1}^KP(\phi_j|\beta)\prod_{i=1}^MP(\theta_i|\alpha)\prod_{n=1}^NP(z_{i,n}|\theta_i)P(w_{i,n}|z_{i,n},\phi_{z_{i,n}})\)</span></p>
+<p>Therefore, the ultimate goal is to determine the unknown, hidden parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span>.  This is done is through a process known as probabilistic inference.  What this basically means is, given that we know the general structure of how the documents are generated and we also know the words that are present in each document, can we work backwards and find the most likely parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span> that could have generated these documents?  The next section explains how this inference process is carried out for the LDA model.</p>
+<h2>Inference - Collapsed Gibbs Sampling</h2>
+<p>We want to know the latent parameters <span class="math">\(\theta\)</span>, <span class="math">\(\phi\)</span>, and <span class="math">\(Z\)</span> which represent the topic distributions for each document, the word distributions for each topic and the topic assignments for each word respectively.  But the only information that we initially have is how many times each word appears in each document (LDA uses a bag-of-words approach).  So we need to infer these latent parameters from the observed data.  This means that we want to know <span class="math">\(P(\theta,\phi,Z|W)\)</span> which is known as the posterior distribution.  From the joint distribution shown above, the posterior distribution can be written as</p>
+<p><span class="math">\(P(\theta,\phi,Z) | W)=\frac{P(\theta,\phi,Z,W|\alpha,\beta)}{P(W|\alpha,\beta)}\)</span></p>
+<p>But it turns out that the denominator <span class="math">\(P(W|\alpha,\beta)\)</span> is intractable so we cannot compute the posterior is this usual way.  This tends to happen a lot in Bayesian inference, so there are a class of approximate inference methods that attempt to compute a distribution that is close to the actual posterior (but much easier to calculate).  In the case of LDA, the original paper by Blei et al. used variational inference to approximate the posterior.  But since then, collapsed Gibbs sampling (a MCMC inference technique) has been more commonly used to do this.  Before we get into the particular collapsed Gibbs sampling inference algorithm, it would be useful to have a quick review of Gibbs sampling and MCMC methods in general.</p>
+<h3>Gibbs Sampling</h3>
+<p>Gibbs sampling is part of a class of approximate inference methods known as Markov Chain Monte Carlo (MCMC) methods.  Generally speaking, MCMC methods work by creating a Markov Chain whose stationary distribution is the posterior distribution that we are looking for.  Consequently, if you simulate this Markov chain, eventually the state of the Markov chain will look like samples from the desired posterior distribution and given these samples you can get a good idea of what the posterior distribution looks like.  Gibbs sampling specifies a particular way of constructing this Markov chain. Say your target distribution is <span class="math">\(P(\textbf{x})=P(x_1,...,x_n)\)</span> but there is no closed form solution for <span class="math">\(P(\textbf{x})\)</span> (like our posterior distribution) so you cannot sample from it directly.  In Gibbs sampling, if you can sample from the conditional distribution <span class="math">\(P(x_i |x_{-i})\)</span>, a Markov chain can be constructed such that the samples from the conditionals converge to samples from the joint (i.e. the target distribution).    The Markov chain progresses as follows </p>
+<ol>
+<li>Randomly intialize the first sample <span class="math">\((x_1,...,x_n)\)</span></li>
+<li>For each cycle <span class="math">\(t\)</span> until convergence.<ol>
+<li>sample <span class="math">\(x_1^t\)</span> from <span class="math">\(P(x_1|x_2^{t-1},...,x_n^{t-1})\)</span></li>
+<li>sample <span class="math">\(x_2^t\)</span> from <span class="math">\(P(x_2|x_1^{t-1},x_3^{t-1},...,x_n^{t-1})\)</span></li>
+<li>continue until you sample <span class="math">\(x_n^t\)</span> from <span class="math">\(P(x_1|x_1^{t-1},...,x_{n-1}^{t-1})\)</span></li>
+</ol>
+</li>
+</ol>
+<p>So each cycle <span class="math">\(t\)</span> produces a new sample of <span class="math">\((x_1,...,x_n)\)</span>.  Eventually the Markov chain will converge and the samples will be very similar to those from the target distribution <span class="math">\(P(\textbf{x})\)</span>.</p>
+<h3>Collapsed Gibbs Sampling for LDA</h3>
+<p>Now let's return to LDA.  Before the collapsed Gibbs sampling procedure can be described, we must realize an important result.  Take an arbitrary parameter vector <span class="math">\(\theta_{i}\)</span> (i.e. the distribution over topics in document <span class="math">\(i\)</span>).  From the graphical model, we know that the topic assignments <span class="math">\(z_i\)</span> follow a multinomial distribution with a Dirichlet prior on <span class="math">\(\theta_i\)</span> .  These two distributions are conjugate pairs which means that that the posterior distribution of <span class="math">\(\theta_i\)</span> also follow a Dirichlet distribution <span class="math">\(Dir(\theta_i|n_i+\alpha)\)</span> (this is a standard result but you can find a <a href="http://en.wikipedia.org/wiki/Dirichlet_distribution#Conjugate_to_categorical.2Fmultinomial">short proof here</a>) where <span class="math">\(n_i\)</span> is the vector of word counts for document <span class="math">\(i\)</span>.  So, to get an estimate of <span class="math">\(\theta_i\)</span> we can take the expected value of this posterior distribution over <span class="math">\(\theta_i\)</span>.  By the definition of the expected value of a Dirichlet distribution, the estimate for <span class="math">\(\theta_{i,k}\)</span> (the proportion of topic <span class="math">\(k\)</span> in document <span class="math">\(i\)</span>) is 
+<div class="math">$$\theta_{i,k}=\frac{n_i^k+\alpha_k}{\sum_{k=1}^Kn_i^k+\alpha_k}$$</div>
+</p>
+<p>where <span class="math">\(n_i^k\)</span> is the number of words in document <span class="math">\(i\)</span> that have been assigned to topic <span class="math">\(k\)</span>.  And by the exact same argument, the estimate for <span class="math">\(\phi_{k,w}\)</span> (the proportion of word <span class="math">\(w\)</span> in topic <span class="math">\(k\)</span>) is </p>
+<p>
+<div class="math">$$\phi_{k,w}=\frac{n_w^k+\beta_w}{\sum_{w=1}^Wn_w^k+\beta_w}$$</div>
+</p>
+<p>where <span class="math">\(n_w^k\)</span> is the number of times word <span class="math">\(w\)</span> is assigned to topic <span class="math">\(k\)</span> (over all documents in the corpus).  So what is the significance of this?  The point is that both of these estimates <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span> only depend on the topic assignments <span class="math">\(Z\)</span>.  Therefore, we are able to only focus on inferring the latent variable <span class="math">\(Z\)</span> and the other latent variables can be computed directly from <span class="math">\(Z\)</span>. This makes things much easier.</p>
+<p>We can infer the topic assignments <span class="math">\(Z\)</span> from the observed data using collapsed Gibbs sampling.  From the previous section on Gibbs sampling, we need to come up with a conditional distribution that is easy to sample from whose joint distribution is the posterior distribution that we are interested in.  The posterior distribution that we are interested in is <span class="math">\(P(Z|W)\)</span> which is the probability of all of the topic assignments given all of the observed words in all of the documents.  So the conditional that we need to sample from is <span class="math">\(P(z_i=j|z_{-i},w)\)</span>.  But we need to know the form of this distribution to make sure that we can easily sample from it.  So let's derive it. </p>
+<p>From Bayes' rule, </p>
+<p><span class="math">\(P(z_i=j|z_{-i},w) \propto P(w_i|z_i=j,z_{-i},w_{-i})P(z_i=j|z_{-i})\)</span></p>
+<p>Now let's focus on the left-most term.  We can marginalize over <span class="math">\(\phi\)</span> to get </p>
+<p><span class="math">\(P(w_i|z_i=j,z_{-i},w_{-i})=\int P(w_i | z_i=j,\phi_j)P(\phi_j |z_{-i},w_{-i})d\phi_j\)</span> </p>
+<p>Let's first look at the first term inside the integral.  Since we are conditioning on the <span class="math">\(\phi_j\)</span> parameters, <span class="math">\(P(w_i | z_i=j,\phi_j)=\phi_{w_i,j}\)</span>.  The second term inside the integral <span class="math">\(P(\phi_j |z_{-i},w_{-i})\)</span> is the posterior distribution of a multinomial likelihood combined with a Dirichlet prior (again!) which has a nice closed form solution that we have seen before.  After solving this integral (exact steps ommitted, but not difficult) we get </p>
+<p><span class="math">\(P(w_i|z_i=j,z_{-i},w_{-i})=\frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\)</span> </p>
+<p>Where <span class="math">\(n_{-i,j}^{w_i}\)</span> is the total number of <span class="math">\(w_i\)</span> instances assigned to topic <span class="math">\(j\)</span> not including the current <span class="math">\(w_i\)</span> and <span class="math">\(n_{-i,j}\)</span> is the total number of words assigned to topic <span class="math">\(j\)</span> not including the current word. As for the second term in the first equation <span class="math">\(P(z_i=j|z_{-i})\)</span> , we can follow the same general procedure.  First we marginalize over <span class="math">\(\theta_i\)</span> to get </p>
+<p><span class="math">\(P(z_i=j|z_{-i})=\int P(z_i=j|\theta_i)P(\theta_{d_i}|z_{-i})d\theta_{d_i}\)</span> </p>
+<p>And just as before, <span class="math">\(P(z_i=j|\theta_{d_i})=\theta_{d_{i},j}\)</span> and <span class="math">\(P(\theta_i|z_{-i})\)</span> is the posterior of a mutlinomial-Dirichlet conjugate pair.  The integral turns out to be </p>
+<p><span class="math">\(P(z_i=j|z_{-i})=\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}\)</span> </p>
+<p>where <span class="math">\(n_{-i,j}^{d_i}\)</span> is the number of words assigned to topic <span class="math">\(j\)</span> in document <span class="math">\(d_i\)</span> not counting the current one and <span class="math">\(n_{-i}^{d_i}\)</span> is the total number of words in document <span class="math">\(d_i\)</span>. Now let's put everything together to get our final conditional distribution for the Gibbs sampler. </p>
+<p>
+<div class="math">$$P(z_i=j|z_{-i},w) \propto \frac{n_{-i,j}^{w_i}+\beta}{n_{-i,j}+W\beta}\frac{n_{-i,j}^{d_i}+\alpha}{n_{-i}^{d_i}+K \alpha}$$</div>
+</p>
+<p>Then we carry out the Gibbs sampling procedure as usual to get samples from the posterior</p>
+<h2>Putting it all Together</h2>
+<p>Hopefully, at this point, all aspects of Latent Dirichlet Allocation are somewhat clear.  In terms of implementation, everything hinges on the Gibbs sampling inference step.  The topic assignments are initialized randomly.  Then the Gibbs procedure is run while keeping track of the required document and topic counts.  Once the sampling has converged, the document/topic distributions <span class="math">\(\theta\)</span> and topic/word distributions <span class="math">\(\phi\)</span> can be trivially computed from the learned topic assignments.  The following pseudocode outlines this process in greater detail. </p>
+<p><img alt="alt text" src="images/lda_algorithm.png" title="lda algorithm" /> </p>
+<p>And, as stated previously, these topic assignments can be used to compute the counts necessary to determine the other hidden variables <span class="math">\(\theta\)</span> and <span class="math">\(\phi\)</span>. See <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Part II of this blog post</a> which explains how to translate this theory into Scala code.</p>
+<h3>Resources</h3>
+<ul>
+<li>The original Paper on LDA that uses variational inference instead of Gibbs sampling.  <a href="http://machinelearning.wustl.edu/mlpapers/paper_files/BleiNJ03.pdf">Latent Dirichlet Allocation - Blei, Ng, Jordan</a></li>
+<li>The original paper on collapsed Gibbs sampling for LDA.  <a href="http://psiexp.ss.uci.edu/research/papers/SteyversGriffithsLSABookFormatted.pdf">Probabilistic Topic Models - Griffiths, Steyvers</a></li>
+<li>Another nice technical report that shows much more detail than what I have shown.  <a href="http://http://www.arbylon.net/publications/text-est.pdf">Parameter Estimation for Text Analysis - Heinrich</a></li>
 </ul>
 <script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
     var mathjaxscript = document.createElement('script');

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Implementing DistBelief with Akka</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Research Engineer at Nitro.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">Topic Modeling</a></li>
+                <li><a href="/tag/deep-learning.html">Deep Learning</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="implementing-distbelief-with-akka.html">Implementing DistBelief with Akka</a><br /><br />
+                <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
+                <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
+                <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
+                <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+          </div>
+
+</div>
+
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/implementing-distbelief-with-akka.html" rel="bookmark"
+               title="Permalink to Implementing DistBelief with Akka">Implementing DistBelief with Akka</a></h1>
+
+        </header>
+
+        <div class="entry-content">
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-07-05T00:00:00+02:00">
+          on&nbsp;Sun 05 July 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
+</div><!-- /.post-info -->          <p>Presently, most deep neural networks are trained using GPUs due to the enormous number of parallel computations that they can perform.  On a single machine, deep neural networks could take days or even weeks to train. The speed-ups offered by GPUs have made this training more practical.  However, using GPUs can be prohitive for several reasons</p>
+<ul>
+<li>GPUs are expensive, both to buy and to rent.</li>
+<li>Most GPUs can only hold a relatively small amount of data.</li>
+<li>CPU-to-GPU data transfer is very slow.  Depending on your application it can be so slow that it actually negates the speed-up that the GPU provides.</li>
+<li>The CUDA GPU programming library is written in low-level C which many programmers are not experienced with.  However there are many deep learning libraries written in high level languages with GPU capabilities e.g. <em>Theano</em>, <em>Torch</em>, <em>Caffe</em>, etc.</li>
+</ul>
+<p><em>DistBelief</em> is a framework for training deep neural networks that avoids GPUs entirely and instead performs parallel computing with clusters of commodity machines.  <em>DistBelief</em> was first presented in the 2012 paper "<em>Large Scale Distributed Deep Networks</em>" by <em>Dean et al.</em>  In this paper, the <a href="http://select.cs.cmu.edu/code/graphlab/">GraphLab</a> distributed computing framework was used to implement <em>DistBelief</em>.  As we shall see later in this post, <em>DistBelief</em> relies heavily on asynchronous message passing between machines which makes the <a href="http://akka.io/">Akka actor framework</a> a suitable alternative.  This post will describe how to implement the <em>DistBelief</em> framework using Akka.  This post will be divided into five sections</p>
+<ol>
+<li>A brief overview of how neural networks are trained using the backpropagation algorithm.</li>
+<li>A brief overview of how Akka handles asynchronous message passing.</li>
+<li>How <em>DistBelief</em> trains deep neural networks using its distributed, asynchronous <em>Downpour SGD</em> algorithm.</li>
+<li>How <em>Downpour SGD</em> can be implemented using Akka.</li>
+<li>A demo using <em>DistBelief</em> to learn the XOR function.</li>
+</ol>
+<p>Let's get started!</p>
+<h1>1. The Backpropagation Algorithm</h1>
+<p>This section is only meant to be a brief overview of the backpropagation algorithm (there are a multitude of online resources available).  Consider the following example 3-layer neural network.</p>
+<p><img alt="neural network" src="images/neural_network_example.png" title="=10x" /></p>
+<p>The 3 layers are called the <em>input layer</em>, the <em>hidden layer</em> and the <em>output layer</em>.  Each layer consists of a number of nodes that are called <em>neural units</em>. Each <em>neural unit</em> in the input layer is connected to every <em>neural unit</em> in the hidden layer via a weight (these are illustrated by the arrows in the above diagram).  The <em>neural units</em> in the input layer correspond to the elements of the input vector of a given training example.  The input to a <em>neural unit</em> in the hidden layer is the weighted sum of its inputs coming from the input layer. This weighted sum is then passed through a non-linearity function (e.g. <em>sigmoid</em>, <em>tanh</em>, <em>reLu</em>, etc.) to get the output of the <em>neural unit</em>.  The process is then repeated between the hidden and output layers to get the final output/prediction.  In the above example, the input is a 4-dimensional vector and the output is a scalar.</p>
+<p>Training a neural network refers to the process of finding the optimal layer weights that map the inputs to the outputs in a given dataset.  This is done via the backpropagation algorithm which consists of three steps.</p>
+<ul>
+<li>A <strong>forward pass</strong> to compute the output for a given input with the current network weights which gives us the predicted output.  We compare the predicted output with the actual output to get the prediction error. </li>
+<li>A <strong>backward pass</strong> to compute the gradients of the layer weights with respect to the prediction error.</li>
+<li>And finally we update the weights by moving them a in the direction of the computed gradients.</li>
+</ul>
+<h3>The Forward Pass</h3>
+<p>Let <span class="math">\(\mathbf{W}_{l,k}\)</span> be the matrix of weights between layer <span class="math">\(l\)</span> and layer <span class="math">\(k\)</span> of an arbitrary neural network i.e. the <span class="math">\((i,j)^{th}\)</span> entry of <span class="math">\(\mathbf{W}_{l,k}\)</span> is the weight from the <span class="math">\(i^{th}\)</span> unit of layer <span class="math">\(l\)</span> to the <span class="math">\(j^{th}\)</span> unit of layer <span class="math">\(k\)</span>.  Also, let <span class="math">\(\mathbf{x}\)</span> be the output of layer <span class="math">\(l\)</span>  (therefore the dimension of <span class="math">\(\mathbf{x}\)</span> is equal to the number of <em>neural units</em> in layer <span class="math">\(l\)</span>).  The output of layer <span class="math">\(k\)</span> is computed in the following way</p>
+<p>
+<div class="math">$$\mathbf{y}_k=\mathbf{W}_{l,k}^T \cdot \mathbf{x}_l$$</div>
+</p>
+<p>Then the output is passed through a nonlinearity called the activation function </p>
+<p>
+<div class="math">$$\mathbf{x}_k=\sigma(y)$$</div>
+</p>
+<p>which then acts as the input for the next layer.  </p>
+<p>The forward pass begins at the input layer with the input of the training example acting as the output of the input layer and the above process is repeated for all layers until the output layer is reached.  The prediction error is simply the difference between the output of the output layer and the target output of the particular training example.</p>
+<h3>The Backward Pass</h3>
+<p>The backward pass is slightly more complicated.  We begin with the prediction error from the forward pass which we call <span class="math">\(\delta_o\)</span>.  Then working backwards from layer <span class="math">\(k\)</span> to layer <span class="math">\(l\)</span> we compute</p>
+<p>
+<div class="math">$$\delta_l = \sigma'(\mathbf{y}_l) \odot (\mathbf{W}^T_{l,k} \cdot \delta_k)$$</div>
+</p>
+<p>where <span class="math">\(\sigma'\)</span> is the derivative of the activation function and <span class="math">\(\odot\)</span> is the elementwise (<em>Hadamard</em>) product. Finally, the gradients corresponding to the weights in the matrix <span class="math">\(\mathbf{W}_{l,k}\)</span> are computed by</p>
+<p>
+<div class="math">$$\nabla_{l,k}=\mathbf{x_l} \cdot \delta_k$$</div>
+</p>
+<p>Therefore, the <span class="math">\(\delta\)</span>'s are passed backwards analogously to how the <span class="math">\(\mathbf{x}\)</span>'s are passed forwards in the forward pass</p>
+<h3>The Weight Updates</h3>
+<p>Given the <span class="math">\(\nabla_{l,k}\)</span> from the backward pass, we can update the weights <span class="math">\(\mathbf{W}_{l,k}\)</span> via the stochastic graident descent equation</p>
+<p>
+<div class="math">$$\mathbf{W}_{l,k}=\mathbf{W}_{l,k} - \eta \cdot \nabla_{l,k}$$</div>
+</p>
+<p>Where <span class="math">\(\eta \in (0,1)\)</span> is the step-size.</p>
+<h1>2. The Akka Actor System</h1>
+<p>Akka is a framework for concurrent programming written in Scala.  Concurrent programming introduces several problems relating to thread safety.  For example, consider a program that holds a mutable state variable.  In a multithreaded environment, multiple threads can access and change this state variable at any time, meaning that no thread can be sure what the value of this variable is after it was initially read.  One way to solve this is with thread synchronization where only one thread can access the state variable at a time.  However, this introduces a new set of problems such as <em>dead-locks</em> and overly-complicated code.  Akka has solved this problem by introducing entities known as actors which encapsulate the mutable state variables and communicate with each other asynchronously via message passing.  If a mutable state needs to be accessed or changed, a message is sent to its corresponding actor.  An actor's incoming messages are placed in a queue which the actor processes sequentially.  It is asynchronous because actors send messages without waiting for a response from the receiving actor leaving them free to perform other tasks i.e. they are non-blocking.  Furthermore, actors can live on different machines with messages being passed across a network without any loss of generality (actors are distributed!).</p>
+<h1>3. DistBelief and Downpour SGD</h1>
+<p>As stated previously, <em>DistBelief</em> is a framework for training deep neural networks in a distributed fashion using clusters of machines rather than GPUs.  The particular distributed training algorithm it uses is called <em>Downpour SGD</em>.  <em>Downpour SGD</em> utilizes two levels of parallelism</p>
+<ul>
+<li><strong>Data Parallelism:</strong> The training data is paritioned across several machines each having its own replica of the model.  Each model trains with its partition of the data in parallel.</li>
+<li><strong>Model Parallelism:</strong>  The layers of each model replica are distributed across machines.</li>
+</ul>
+<p>To describe <em>Downpour SGD</em> in greater detail, let's start with the data partitions.  The data paritions (called <em>data shards</em> in the original paper) each train their own model replica with their partition of the data (i.e. one model replica per data shard).  Furthermore, each model replica is partitioned across machines by layer.  The weights for the model are held in a central parameter server which is also paritioned across multiple machines.  Each parameter partition holds the weights for one layer of the model (for example, if the model replicas have 3 layers, then the parameter server has 2 partitions for the weights from layer 1 to layer 2 and the weights from layer 2 to layer 3 respectively).  Therefore, as the model replicas are trained in parallel, they <em>asynchronously</em> read (in the forward pass) and update (in the backward pass) their corresponding weight parameters. This means that the weight parameter that a model replica layer reads may have been previously updated by the same layer from a different model replica.</p>
+<p>This process can be more easily understood with the following diagram.</p>
+<p><img alt="downpour sgd" src="images/downpour_sgd.png" title="=5x" /></p>
+<p>The above diagram shows the models replicas for each data shard which are themselves paritioned (as illustrated by the blue grid squares).  And each replica communicates asynchronously with the central parameter server which is also partitioned across machines.</p>
+<h1>4. Implementing Downpour SGD with Akka</h1>
+<p>From the previous section on <em>Downpour SGD</em>, there is asynchronous communication between the model replicas and parameter shards.  Also, from section 2, we know that Akka was built for dealing with asynchronous message passing which makes <em>Downpour SGD</em> and Akka a great match!</p>
+<h3>The Parameter Shard Actor</h3>
+<p>Let's start with the central parameter server.  Again, the parameter server is partitioned across machines with each partition corresponding to a layer of the neural network model.  As you might expect, we can represent each partition as an Akka actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">ParameterShard</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">ParameterRequest</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">LatestParameters</span><span class="o">(</span><span class="n">weights</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">ParameterShard</span><span class="o">(</span><span class="n">shardId</span><span class="k">:</span> <span class="kt">Int</span>
+                     <span class="o">,</span> <span class="n">learningRate</span><span class="k">:</span> <span class="kt">Double</span>
+                     <span class="o">,</span> <span class="n">initialWeight</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.ParameterShard._</span>
+
+  <span class="k">var</span> <span class="n">latestParameter</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">initialWeight</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">ParameterRequest</span> <span class="k">=&gt;</span> <span class="n">context</span><span class="o">.</span><span class="n">sender</span><span class="o">()</span> <span class="o">!</span> <span class="nc">LatestParameters</span><span class="o">(</span><span class="n">latestParameter</span><span class="o">)</span>
+    <span class="k">case</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">g</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">latestParameter</span> <span class="k">=</span> <span class="n">latestParameter</span> <span class="o">+</span> <span class="o">(</span><span class="n">g</span><span class="o">.</span><span class="n">t</span> <span class="o">*</span> <span class="n">learningRate</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+</pre></div>
+
+
+<p>The code above is fairly straight-forward.  When the parameter shard actor is first created it is given a unique <code>shardId</code>, a learning rate for the update step and a random intial weight.  When a model replica layer requests the latest parameter values, the actor sends them back to the replica layer wrapped in a <code>LatestParameters</code> message.  If a gradient message is received, then the actor uses the gradient to update its parameters.</p>
+<h3>The Data Shard Actor</h3>
+<p>Each data partition can also be represented as an actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">DataShard</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">ReadyToProcess</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">FetchParameters</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">DataShard</span><span class="o">(</span><span class="n">shardId</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span>
+                <span class="n">trainingData</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">Example</span><span class="o">],</span>
+                <span class="n">activation</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+                <span class="n">activationDerivative</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+                <span class="n">parameterShards</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">])</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.DataShard._</span>
+
+  <span class="k">val</span> <span class="n">numLayers</span> <span class="k">=</span> <span class="n">parameterShards</span><span class="o">.</span><span class="n">size</span>
+  <span class="k">val</span> <span class="n">outputActor</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">OutputActor</span><span class="o">))</span>
+  <span class="k">val</span> <span class="n">trainingDataIterator</span> <span class="k">=</span> <span class="n">trainingData</span><span class="o">.</span><span class="n">toIterator</span>
+  <span class="k">val</span> <span class="n">layers</span><span class="k">:</span> <span class="kt">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">](</span><span class="n">numLayers</span><span class="o">)</span>
+
+  <span class="k">for</span> <span class="o">(</span><span class="n">l</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="n">layers</span><span class="o">(</span><span class="n">l</span><span class="o">)</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">Layer</span><span class="o">(</span>
+      <span class="n">shardId</span>
+      <span class="o">,</span> <span class="n">l</span>
+      <span class="o">,</span> <span class="n">activation</span>
+      <span class="o">,</span> <span class="n">activationDerivative</span>
+      <span class="o">,</span> <span class="k">if</span> <span class="o">(</span><span class="n">l</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="nc">Some</span><span class="o">(</span><span class="n">layers</span><span class="o">(</span><span class="n">l</span> <span class="o">-</span> <span class="mi">1</span><span class="o">))</span> <span class="k">else</span> <span class="nc">None</span> <span class="c1">//parent layer actor</span>
+      <span class="o">,</span> <span class="n">parameterShards</span><span class="o">(</span><span class="n">l</span><span class="o">)</span>
+      <span class="o">,</span> <span class="k">if</span> <span class="o">(</span><span class="n">l</span> <span class="o">==</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="nc">Some</span><span class="o">(</span><span class="n">outputActor</span><span class="o">)</span> <span class="k">else</span> <span class="nc">None</span><span class="o">)))</span> 
+
+    <span class="k">if</span> <span class="o">(</span><span class="n">l</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="n">layers</span><span class="o">(</span><span class="n">l</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">!</span> <span class="nc">MyChild</span><span class="o">(</span><span class="n">layers</span><span class="o">(</span><span class="n">l</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="k">var</span> <span class="n">layersNotUpdated</span> <span class="k">=</span> <span class="o">(</span><span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">).</span><span class="n">toSet</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">ReadyToProcess</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">layers</span><span class="o">.</span><span class="n">foreach</span><span class="o">(</span><span class="k">_</span> <span class="o">!</span> <span class="nc">FetchParameters</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">waitForAllLayerUpdates</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">waitForAllLayerUpdates</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">DoneFetchingParameters</span><span class="o">(</span><span class="n">layerId</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="n">layersNotUpdated</span> <span class="o">-=</span> <span class="n">layerId</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">layersNotUpdated</span><span class="o">.</span><span class="n">isEmpty</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">trainingDataIterator</span><span class="o">.</span><span class="n">hasNext</span><span class="o">)</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">dataPoint</span> <span class="k">=</span> <span class="n">trainingDataIterator</span><span class="o">.</span><span class="n">next</span><span class="o">()</span>
+          <span class="n">layers</span><span class="o">.</span><span class="n">head</span> <span class="o">!</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">dataPoint</span><span class="o">.</span><span class="n">x</span><span class="o">,</span> <span class="n">dataPoint</span><span class="o">.</span><span class="n">y</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">context</span><span class="o">.</span><span class="n">parent</span> <span class="o">!</span> <span class="nc">Done</span><span class="o">(</span><span class="n">shardId</span><span class="o">)</span>
+          <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="n">layersNotUpdated</span> <span class="k">=</span> <span class="o">(</span><span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">).</span><span class="n">toSet</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">unbecome</span><span class="o">()</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The above actor is doing several things.  First, since each data shard has its own model replica, the data shard actor creates the layer actors (these will be explained next) for its replica.  Once the model actors are created, the data shard waits to receive the <code>ReadyToProcess</code> message at which point a <code>FetchParameters</code> message is sent to each layer actor in the replica which tells them to retrieve the latest version of their weight parameters from their corresponding parameter shards.  At this point, the actor enters a waiting state until each of its layer actors has successfully updated its parameters.  Once this happens, the actor can send the first data point to the input layer of its replica for processing.  When the backpropagation process has finished for that data point, the actor will again receive the <code>ReadyToProcess</code> message and the process will repeat.  Once the actor has processed all of its data points, it is done and the actor stops itself.</p>
+<h3>The Neural Network Layer Actor</h3>
+<p>Next we will describe the replica layer actor that is created within the data shard actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">Layer</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">DoneFetchingParameters</span><span class="o">(</span><span class="n">layerId</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">g</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">inputs</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">target</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">deltas</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">MyChild</span><span class="o">(</span><span class="n">ar</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">Layer</span><span class="o">(</span><span class="n">replicaId</span><span class="k">:</span> <span class="kt">Int</span>
+            <span class="o">,</span> <span class="n">layerId</span><span class="k">:</span> <span class="kt">Int</span>
+            <span class="o">,</span> <span class="n">activationFunction</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>
+            <span class="o">,</span> <span class="n">activationFunctionDerivative</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>
+            <span class="o">,</span> <span class="n">parentLayer</span><span class="k">:</span> <span class="kt">Option</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span>
+            <span class="o">,</span> <span class="n">parameterShardId</span><span class="k">:</span> <span class="kt">ActorRef</span>
+            <span class="o">,</span> <span class="n">outputAct</span><span class="k">:</span> <span class="kt">Option</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">])</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.Layer._</span>
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.OutputActor.Output</span>
+
+  <span class="k">var</span> <span class="n">latestWeights</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="k">_</span>
+  <span class="k">var</span> <span class="n">activations</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="k">_</span>
+  <span class="k">var</span> <span class="n">activatedInput</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="k">_</span>
+  <span class="k">var</span> <span class="n">childLayer</span><span class="k">:</span> <span class="kt">Option</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span> <span class="k">=</span> <span class="nc">None</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">FetchParameters</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">parameterShardId</span> <span class="o">!</span> <span class="nc">ParameterRequest</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">waitForParameters</span><span class="o">)</span>
+    <span class="o">}</span>
+
+    <span class="k">case</span> <span class="nc">MyChild</span><span class="o">(</span><span class="n">ar</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">childLayer</span> <span class="k">=</span> <span class="nc">Some</span><span class="o">(</span><span class="n">ar</span><span class="o">)</span>
+
+    <span class="k">case</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">inputs</span><span class="o">,</span> <span class="n">target</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="n">activatedInput</span><span class="k">=</span><span class="n">parentLayer</span> <span class="k">match</span> <span class="o">{</span>
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">p</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">.</span><span class="n">vertcat</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">),</span> <span class="n">activationFunction</span><span class="o">(</span><span class="n">inputs</span><span class="o">))</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">inputs</span>
+      <span class="o">}</span>
+
+      <span class="k">val</span> <span class="n">outputs</span> <span class="k">=</span> <span class="n">computeLayerOutputs</span><span class="o">(</span><span class="n">activatedInput</span><span class="o">,</span> <span class="n">latestWeights</span><span class="o">)</span>
+      <span class="k">val</span> <span class="n">activatedOutputs</span> <span class="k">=</span> <span class="n">activationFunction</span><span class="o">(</span><span class="n">outputs</span><span class="o">)</span>
+
+      <span class="n">activations</span> <span class="k">=</span> <span class="n">parentLayer</span> <span class="k">match</span><span class="o">{</span>
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">p</span><span class="o">)</span><span class="k">=&gt;</span><span class="nc">DenseVector</span><span class="o">.</span><span class="n">vertcat</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">),</span> <span class="n">inputs</span><span class="o">)</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">inputs</span>
+      <span class="o">}</span>
+
+      <span class="n">childLayer</span> <span class="k">match</span> <span class="o">{</span>
+
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">nextLayer</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+          <span class="n">nextLayer</span> <span class="o">!</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">outputs</span><span class="o">,</span> <span class="n">target</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">deltas</span> <span class="k">=</span> <span class="n">computePredictionError</span><span class="o">(</span><span class="n">activatedOutputs</span><span class="o">,</span> <span class="n">target</span><span class="o">)</span>
+          <span class="k">val</span> <span class="n">gradient</span> <span class="k">=</span> <span class="n">computeGradient</span><span class="o">(</span><span class="n">deltas</span><span class="o">,</span> <span class="n">activatedInput</span><span class="o">)</span>
+
+          <span class="n">parameterShardId</span> <span class="o">!</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">gradient</span><span class="o">)</span>
+          <span class="k">val</span> <span class="n">parentDeltas</span> <span class="k">=</span> <span class="n">computeDeltas</span><span class="o">(</span><span class="n">deltas</span><span class="o">,</span> <span class="n">activations</span><span class="o">,</span> <span class="n">latestWeights</span><span class="o">,</span> <span class="n">activationFunctionDerivative</span><span class="o">)</span>
+          <span class="n">context</span><span class="o">.</span><span class="n">sender</span><span class="o">()</span> <span class="o">!</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">parentDeltas</span><span class="o">)</span>
+          <span class="n">outputAct</span><span class="o">.</span><span class="n">get</span> <span class="o">!</span> <span class="nc">Output</span><span class="o">(</span><span class="n">replicaId</span><span class="o">,</span> <span class="n">activatedOutputs</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="k">case</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">childDeltas</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">gradient</span> <span class="k">=</span> <span class="n">computeGradient</span><span class="o">(</span><span class="n">childDeltas</span><span class="o">,</span> <span class="n">activatedInput</span><span class="o">)</span>
+      <span class="n">parameterShardId</span> <span class="o">!</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">gradient</span><span class="o">)</span>
+
+      <span class="n">parentLayer</span> <span class="k">match</span> <span class="o">{</span>
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">previousLayer</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">parentDeltas</span> <span class="k">=</span> <span class="n">computeDeltas</span><span class="o">(</span><span class="n">childDeltas</span><span class="o">,</span> <span class="n">activations</span><span class="o">,</span> <span class="n">latestWeights</span><span class="o">,</span> <span class="n">activationFunctionDerivative</span><span class="o">)</span>
+          <span class="n">previousLayer</span> <span class="o">!</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">parentDeltas</span><span class="o">(</span><span class="mi">1</span> <span class="n">to</span> <span class="o">-</span><span class="mi">1</span><span class="o">))</span>
+        <span class="o">}</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">context</span><span class="o">.</span><span class="n">parent</span> <span class="o">!</span> <span class="nc">ReadyToProcess</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">waitForParameters</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">LatestParameters</span><span class="o">(</span><span class="n">weights</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">latestWeights</span> <span class="k">=</span> <span class="n">weights</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">parent</span> <span class="o">!</span> <span class="nc">DoneFetchingParameters</span><span class="o">(</span><span class="n">layerId</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">unbecome</span><span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>A layer actor can accept four messages</p>
+<ul>
+<li><strong>FetchParameters:</strong> When this message is received the actor sends a message to its corresponding parameter shard to get the latest version of its weights.  It then enters a waiting context until these wieghts are received at which point it returns to its default context.</li>
+<li><strong>MyChild:</strong> This message gives the layer actor the <code>actorRef</code> of its child layer.  This should happen immediately after the layer actor is created in the <code>DataShard</code> actor.  Obviously, if the layer is the output layer of the network then it will never receive this kind of message.</li>
+<li><strong>ForwardPass:</strong>  This message is received during the forward pass of the previously mentioned backpropagation algorithm.  It contains the outputs of the previous layer which are needed to compute the outputs of the current layer.  If the actor has a child layer (given by the <code>MyChild</code> message) it sends the same <code>ForwardPass</code> message to the child layer actor.  Alternatively, if this is the output layer of the neural network then the backwards pass is initialized by computing the prediction error as well as the <span class="math">\(\delta\)</span>'s and gradients for this layer.  The gradients are sent to the <code>ParameterShard</code> actor to asynchronously update the centralized weights.  Then we continue the backpropagation procedure by sending the <span class="math">\(\delta\)</span>'s to the current layer's parent layer actor wrapped in a <code>BackwardPass</code> message.</li>
+<li><strong>BackwardPass:</strong>  When the actor receives a <code>BackwardPass</code> message containing the <span class="math">\(\delta\)</span>'s from the  child layer, it uses them to compute the gradient of of the current layer (which is sent to the <code>ParameterShard</code> for updating) and also to compute the <span class="math">\(\delta\)</span>'s of the current layer which it passes to its parent layer if it exits.  If the parent layer does not exist (i.e. it is the input layer) then the backpropagation procedure is finished at which point the layer sends a <code>ReadyToProcess</code> message to its <code>DataShard</code> actor indicating that it is ready to process another data point. </li>
+</ul>
+<h3>The Master Actor</h3>
+<p>The <code>Master</code> actor is in control of the full data set and is responsible for kicking off the entire process.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">Master</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Done</span><span class="o">(</span><span class="n">dataShardId</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Start</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">Master</span><span class="o">(</span><span class="n">dataSet</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">Example</span><span class="o">],</span>
+             <span class="n">dataPerReplica</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span>
+             <span class="n">layerDimensions</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">Int</span><span class="o">],</span>
+             <span class="n">activation</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+             <span class="n">activationDerivative</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+             <span class="n">learningRate</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.actors.Master._</span>
+
+  <span class="k">val</span> <span class="n">numLayers</span> <span class="k">=</span> <span class="n">layerDimensions</span><span class="o">.</span><span class="n">size</span>
+  <span class="k">val</span> <span class="n">dataShards</span> <span class="k">=</span> <span class="n">dataSet</span><span class="o">.</span><span class="n">grouped</span><span class="o">(</span><span class="n">dataPerReplica</span><span class="o">).</span><span class="n">toSeq</span>
+  <span class="k">val</span> <span class="n">parameterShardActors</span><span class="k">:</span> <span class="kt">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">](</span><span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span>
+
+  <span class="k">for</span> <span class="o">(</span><span class="n">i</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="n">parameterShardActors</span><span class="o">(</span><span class="n">i</span><span class="o">)</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">ParameterShard</span><span class="o">(</span>
+      <span class="n">i</span>
+      <span class="o">,</span> <span class="n">learningRate</span>
+      <span class="o">,</span> <span class="nc">NeuralNetworkOps</span><span class="o">.</span><span class="n">randomMatrix</span><span class="o">(</span><span class="n">layerDimensions</span><span class="o">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="o">),</span> <span class="n">layerDimensions</span><span class="o">(</span><span class="n">i</span><span class="o">)+</span><span class="mi">1</span><span class="o">)</span>
+    <span class="o">)))</span>
+  <span class="o">}</span>
+
+  <span class="k">val</span> <span class="n">dataShardActors</span> <span class="k">=</span> <span class="n">dataShards</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="n">dataShard</span> <span class="k">=&gt;</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">DataShard</span><span class="o">(</span><span class="n">dataShard</span><span class="o">.</span><span class="n">_2</span>
+      <span class="o">,</span> <span class="n">dataShard</span><span class="o">.</span><span class="n">_1</span>
+      <span class="o">,</span> <span class="n">activation</span>
+      <span class="o">,</span> <span class="n">activationDerivative</span>
+      <span class="o">,</span> <span class="n">parameterShardActors</span><span class="o">)))</span>
+  <span class="o">}</span>
+
+  <span class="k">var</span> <span class="n">numShardsFinished</span> <span class="k">=</span> <span class="mi">0</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">Start</span> <span class="k">=&gt;</span> <span class="n">dataShardActors</span><span class="o">.</span><span class="n">foreach</span><span class="o">(</span><span class="k">_</span> <span class="o">!</span> <span class="nc">ReadyToProcess</span><span class="o">)</span>
+
+    <span class="k">case</span> <span class="nc">Done</span><span class="o">(</span><span class="n">id</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">numShardsFinished</span> <span class="o">+=</span> <span class="mi">1</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">numShardsFinished</span> <span class="o">==</span> <span class="n">dataShards</span><span class="o">.</span><span class="n">size</span><span class="o">)</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;DONE!!!!!!!!!!!!!!!&quot;</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The <code>Master</code> actor partitions the data and creates a <code>DataShard</code> actor for each partition.  The <code>Master</code> actor also creates <code>ParameterShard</code> actors for each layer weight in the model (remember the model is replicated but there is only one set of parameters that each of them read and update).</p>
+<h1>5. Demo: Learning the XOR Function</h1>
+<p>The XOR function is defined by the following truth table.</p>
+<p><img alt="xor table" src="images/xorTT.png" title="=5x" /></p>
+<p>Even though this looks like a simple function, learning the XOR function (i.e. being able to predict the correct XOR output given an XOR input) is a classic problem in machine learning because the it is not <em>linearly separable</em>.  This is clearly illustrated by plotting the function.</p>
+<p><img alt="xor function" src="images/xorgraph.gif" title="=5x" /></p>
+<p>From the above graph you can see that there is no line that can separate the <span class="math">\(1\)</span> outputs from the <span class="math">\(0\)</span> outputs.  Therefore, no linear classifier can solve this problem (e.g. logistic regression cannot solve this).  However, a multilayer perceptron (a neural network with a hidden layer) can learn non-linear functions. In fact, a multilayer perceptron can learn virtually any non-linear function given a sufficient number of <em>neural units</em> in its hidden layer.  Therefore, the XOR function is a great test for our Akka implementation of <em>DistBelief</em>.</p>
+<p>The following actor applies <em>DistBelief</em> to the XOR problem</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">XOR</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">val</span> <span class="n">random</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Random</span>
+
+  <span class="k">val</span> <span class="n">possibleExamples</span> <span class="k">=</span> <span class="nc">Seq</span><span class="o">(</span>
+    <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">0.0</span><span class="o">))</span>
+    <span class="o">,</span> <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">))</span>
+    <span class="o">,</span> <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">))</span>
+    <span class="o">,</span> <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">0.0</span><span class="o">))</span>
+  <span class="o">)</span>
+
+  <span class="k">val</span> <span class="n">trainingSet</span> <span class="k">=</span> <span class="o">(</span><span class="mi">1</span> <span class="n">to</span> <span class="mi">50000</span><span class="o">).</span><span class="n">foldLeft</span><span class="o">(</span><span class="nc">Seq</span><span class="o">[</span><span class="kt">Example</span><span class="o">]())</span> <span class="o">{</span> <span class="o">(</span><span class="n">a</span><span class="o">,</span> <span class="n">c</span><span class="o">)</span> <span class="k">=&gt;</span>
+    <span class="n">a</span> <span class="o">:+</span> <span class="n">possibleExamples</span><span class="o">(</span><span class="n">random</span><span class="o">.</span><span class="n">nextInt</span><span class="o">(</span><span class="n">possibleExamples</span><span class="o">.</span><span class="n">size</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="k">val</span> <span class="nc">DistBeliefMaster</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">Master</span><span class="o">(</span>
+    <span class="n">trainingSet</span>
+    <span class="o">,</span> <span class="mi">2000</span>
+    <span class="o">,</span> <span class="nc">Seq</span><span class="o">(</span><span class="mi">2</span><span class="o">,</span> <span class="mi">2</span><span class="o">,</span> <span class="mi">1</span><span class="o">)</span>
+    <span class="o">,</span> <span class="o">(</span><span class="n">x</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">el</span> <span class="k">=&gt;</span> <span class="n">sigmoid</span><span class="o">(</span><span class="n">el</span><span class="o">))</span>
+    <span class="o">,</span> <span class="o">(</span><span class="n">x</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">el</span> <span class="k">=&gt;</span> <span class="n">sigmoid</span><span class="o">(</span><span class="n">el</span><span class="o">)</span> <span class="o">*</span> <span class="o">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">sigmoid</span><span class="o">(</span><span class="n">el</span><span class="o">)))</span>
+    <span class="o">,</span> <span class="mf">0.5</span><span class="o">)))</span>
+
+  <span class="nc">DistBeliefMaster</span> <span class="o">!</span> <span class="nc">Start</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">JobDone</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Yay finished!!!!&quot;</span><span class="o">)</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>In the above code we define the possible examples from the XOR truth table (with a bias term).  Then we create a data set of 50,000 randomly selected XOR examples.  Then we instantiate the <code>Master</code> actor from our <em>DistBelief</em> implementation.  The structure of the model replicas are defined by the <code>Seq(2,2,1)</code> parameter.  This means that our replicas will have 3 layers with the first two layers have 2 <em>neural units</em> each and an output layer with one <em>neural unit</em> (note that all layers except for the output layer will have an addition bias <em>neural unit</em> as well).  Also, to emphasize data parallelism, we partition our data set into shards of size 2000 which means that there will be 25 model replicas performing backpropagation in parallel.  We also need to specify the activation function as well as its derviative.  A common choice is the sigmoid function</p>
+<p>
+<div class="math">$$f(x)=\frac{1}{1+e^{-x}}$$</div>
+</p>
+<p>with a corresponding derivative function</p>
+<p>
+<div class="math">$$f'(x)=f(x)(1 - f(x))$$</div>
+</p>
+<p>We also use a learning rate of <span class="math">\(0.5\)</span>.</p>
+<p>In order to make sure that the XOR function is being learned correctly, we log each prediction/target pair for each forward pass of each model replica.  Furthermore, in order to make sure that each replica is reading and updating their corresponding parameter shard asynchronously, we log each parameter read and update.</p>
+<p>After we run the XOR actor, we can look at these logs.  Let's first look at a sample from the parameter update logs.</p>
+<div class="highlight"><pre><span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights updated by model replica 24</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-2] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">b</span><span class="x">] layer 1 weights updated by model replica 6</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights read by model replica 24</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights read by model replica 0</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights read by model replica 22</span>
+</pre></div>
+
+
+<p>As you can see, reading and updating is very asynchronous.  For example, <code>replica 0</code> and <code>replica 22</code> read parameters that were previously updated by <code>replica 24</code>.</p>
+<p>Let's also take a look at a sample from the output/target logs.</p>
+<div class="highlight"><pre><span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-4] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">y</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 22, output: DenseVector(0.9846411083444292), target DenseVector(1.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-4] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">j</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 7, output: DenseVector(0.014412132053034238), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-9] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">c</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 0, output: DenseVector(0.9846381514105996), target DenseVector(1.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-2] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">i</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 6, output: DenseVector(0.9845703091212112), target DenseVector(1.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-13] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">j</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 7, output: DenseVector(0.01441744292688417), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-6] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">c</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 0, output: DenseVector(0.01441785533627319), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-15] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">j</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 7, output: DenseVector(0.01440768622587647), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-15] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">i</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 6, output: DenseVector(0.9845776319773324), target DenseVector(1.0)</span>
+</pre></div>
+
+
+<p>As you can see, the predictions are very close to the targets indicating that we have successfully learned the non-linear XOR function!  They change slightly for the same training examples because the parameter weights are constantly being updated in the backward pass.</p>
+<p>In summary, an Akka implementation of the <em>DistBelief</em> deep neural network training framework has been presented.</p>
+<h2>References</h2>
+<ul>
+<li><a href="http://papers.nips.cc/paper/4687-large-scale-distributed-deep-networks.pdf">"Large Scale Distributed Deep Networks" by Dean et al.</a></li>
+<li><a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">The Akka Frameword Website</a></li>
+<li><a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a> </li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+        </div><!-- /.entry-content -->
+        <div class="comments">
+
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "implementing-distbelief-with-akka.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
+
+      </article>
+    </div>
+</section>
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

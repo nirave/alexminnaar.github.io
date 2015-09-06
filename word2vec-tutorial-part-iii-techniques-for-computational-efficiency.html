@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Word2Vec Tutorial Part III: Techniques for Computational Efficiency</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Natural language processing at VerticalScope.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
+                <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
+                <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
+                <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+          </div>
+
+</div>
+
+<section id="content" >
+    <div class="body">
+      <article>
+        <header>
+          <h1 class="entry-title">
+            <a href="/word2vec-tutorial-part-iii-techniques-for-computational-efficiency.html" rel="bookmark"
+               title="Permalink to Word2Vec Tutorial Part III: Techniques for Computational Efficiency">Word2Vec Tutorial Part III: Techniques for Computational Efficiency</a></h1>
+
+        </header>
+
+        <div class="entry-content">
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-05-18T00:00:00+02:00">
+          on&nbsp;Mon 18 May 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+</div><!-- /.post-info -->          <p>In the previous two posts we saw that both the <em>skip-gram</em> and <em>continous bag-of-words</em> Word2Vec models are powerful tools for encoding a word's semantic information.  However, in both of these models, computing <span class="math">\(\mathbf{v'}_w\)</span> is computationally expensive in their current forms.  This is because each training instance requires us to compute the prediction error</p>
+<p>
+<div class="math">$$\frac{\partial{E}}{\partial{u_{c,j}}}=y_{c,j} - t_{c,j}$$</div>
+</p>
+<p>and to compute <span class="math">\(y_{c,j}\)</span> (for the <em>skip-gram</em> model) we must evaluate</p>
+<p>
+<div class="math">$$y_{c,j}=\frac{exp(u_{c,j})}{\sum_{j'=1}^V exp(u_{j'})}$$</div>
+</p>
+<p>which requires us to compute <span class="math">\(u_{j'}\)</span> for every word in the vocabulary <span class="math">\(V\)</span>.  In practice, there are usually tens of thousands of words in a typical vocabulary and several million training instances are usually required to produce a good Word2Vec model.  Clearly this is computationally prohibitive.  Fortunately, there are a couple of techniques that can be applied to Word2Vec models to make them more computationally efficient - hierarchical softmax and negative subsampling.</p>
+<h1>Hierarchical Softmax</h1>
+<h1>Negative Sub-sampling</h1>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+        </div><!-- /.entry-content -->
+        <div class="comments">
+
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+            var disqus_identifier = "word2vec-tutorial-part-iii-techniques-for-computational-efficiency.html";
+            (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = 'http://alexminnaar.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+          </script>
+        </div>
+
+      </article>
+    </div>
+</section>
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

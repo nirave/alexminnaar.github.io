@@ -30,7 +30,7 @@
 	      <div class="LaunchyardDetail"><p><a href="/"></a>
 <a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
 <br/>
-Machine Learning at University College London. Natural language processing at VerticalScope.
+Machine Learning at University College London. Research Engineer at Nitro.
 <br/>
 <br/>
 <a href="mailto:minnaaralex@gmail.com">Email</a><br />
@@ -43,7 +43,8 @@ Machine Learning at University College London. Natural language processing at Ve
 			<h3>Categories</h3>
 			<div align="left">
 			<ul>
-				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/nlp.html">Topic Modeling</a></li>
+                <li><a href="/tag/deep-learning.html">Deep Learning</a></li>
 				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
 				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
 				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
@@ -51,6 +52,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="implementing-distbelief-with-akka.html">Implementing the DistBelief Deep Neural Network Training Framework with Akka</a><br /><br />
                 <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
                 <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
                 <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
@@ -86,7 +88,7 @@ Machine Learning at University College London. Natural language processing at Ve
         </li>
 
 	</ul>
-<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
 </div><!-- /.post-info -->          <p>In the <a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">previous post</a> the concept of word vectors was explained as was the derivation of the <em>skip-gram</em> model.  In this post we will explore the other <em>Word2Vec</em> model - the <em>continuous bag-of-words</em> (CBOW) model.  If you understand the <em>skip-gram</em> model then the <em>CBOW</em> model should be quite straight-forward because in many ways they are mirror images of each other.  For instance, if you look at the model diagram</p>
 <p><img alt="skip-gram model" src="images/cbow.png" /> </p>
 <p>it looks like the <em>skip-gram</em> model with the inputs and outputs reversed.  The input layer consists of the <em>one-hot</em> encoded input context words <span class="math">\(\{\mathbf{x_1},...,\mathbf{x_C}\}\)</span> for a word window of size <span class="math">\(C\)</span> and vocabulary of size <span class="math">\(V\)</span>.  The hidden layer is an N-dimensional vector <span class="math">\(\mathbf{h}\)</span>.  Finally, the output layer is output word <span class="math">\(\mathbf{y}\)</span> in the training example which is also <em>one-hot</em> encoded.  The <em>one-hot</em> encoded input vectors are connected to the hidden layer via a <span class="math">\(V \times N\)</span> weight matrix <span class="math">\(\mathbf{W}\)</span> and the hidden layer is connected to the output layer via a <span class="math">\(N \times V\)</span> wieght matrix <span class="math">\(\mathbf{W'}\)</span>.</p>

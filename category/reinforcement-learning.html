@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Alex Minnaar's Blog - Machine Learning, Data Science and Software Engineering - Reinforcement-Learning</title>
+        <meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="shortcut icon" href="http://launchyard.com/images/favicon.png"/>
+        <link rel="stylesheet" href="/theme/css/main.css" type="text/css" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie.css"/>
+                <script src="/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="/css/ie6.css"/><![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js" type="text/javascript"></script>
+
+
+</head>
+
+<body id="index" class="home">
+	
+  <!--      <header id="banner" class="body">
+                <h1><a href="/"><img src="http://www.launchyard.com/images/logo.png" /></a></h1>
+        </header> -->
+<!-- /#banner -->
+	      <div class="LaunchyardDetail"><p><a href="/"></a>
+<a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
+<br/>
+Machine Learning at University College London. Research Engineer at Nitro.
+<br/>
+<br/>
+<a href="mailto:minnaaralex@gmail.com">Email</a><br />
+<a href="https://github.com/alexminnaar">Github</a><br/>
+<a href="https://ca.linkedin.com/pub/alex-minnaar/56/a23/853">LinkedIn</a><br/>
+</p>
+
+
+<div id="recent_posts">
+			<h3>Categories</h3>
+			<div align="left">
+			<ul>
+				<li><a href="/tag/nlp.html">Topic Modeling</a></li>
+                <li><a href="/tag/deep-learning.html">Deep Learning</a></li>
+				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
+				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
+				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
+				<li><a href="/tag/software-engineering.html">Software Engineering</a></li>
+			</ul>
+			</div>
+              <h3>Recent Posts</h3>
+                <a href="implementing-distbelief-with-akka.html">Implementing the DistBelief Deep Neural Network Training Framework with Akka</a><br /><br />
+                <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
+                <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
+                <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
+                <a href="deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a><br /><br />
+                <a href="building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a><br /><br />
+                <a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a><br /><br />
+                <a href="/introduction-to-the-multithreading-problem-and-the-akka-actor-solution.html">Introduction to the Multithreading Problem and the Akka Actor Solution  </a><br /><br />
+                <a href="/scalaner-a-scala-wrapper-for-the-stanford-ner-tool-with-some-added-features.html">ScalaNER: A Scala Wrapper for the Stanford NER Tool with Some Added Features  </a><br /><br />
+                <a href="/online-latent-dirichlet-allocation-the-best-option-for-topic-modeling-with-large-data-sets.html">Online Latent Dirichlet Allocation - The Best Option for Topic Modeling with Large Data Sets  </a><br /><br />
+                <a href="/latent-dirichlet-allocation-in-scala-part-ii-the-code.html">Latent Dirichlet Allocation in Scala Part II - The Code </a><br /><br />
+          </div>
+
+</div>
+
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/solving-a-markov-decision-process-with-policy-iteration-and-value-iteration.html">Solving a Markov Decision Process with Policy Iteration and Value Iteration</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-07-05T00:00:00+02:00">
+          on&nbsp;Sun 05 July 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/reinforcement-learning.html">   Reinforcement Learning</a></p>
+</div><!-- /.post-info --><p>Most people think that all machine learning algorithms can be put into one of two categories - unsupervised or supervised learning (or perhaps semi-supervised learning).  However, reinforcement learning is a sub-field of machine learning that does not fit nicely into either of these boxes.  At a high level, reinforcement learning deals with an agent's behaviour in an environment where the agent can sequentially perform actions with associated rewards.  Naturally, the agent wants to perform actions in such a way as to maximize it's cumulative reward.  Reinforcement learning has clear applications in domains such as psychology, neuroscience, game theory, and many more which makes it an active area of research.  One way to formally define a reinforcement learning problem is the <em>Markov Decision Process</em> (MDP).</p>
+<h1>The Markov Decision Process</h1>
+<p>An MDP is defined by the 5-tuple <span class="math">\(\langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}, \gamma \rangle\)</span> where</p>
+<ul>
+<li><span class="math">\(\mathcal{S}\)</span> is a finite set of states.</li>
+<li><span class="math">\(\mathcal{A}\)</span> is a finite set of actions.</li>
+<li><span class="math">\(\mathcal{P}\)</span> is a state transition probability matrix where <span class="math">\(\mathcal{P}^a_{ss'}=P[S_{t+1}=s' | S_t=s, A_t=a]\)</span>.</li>
+<li><span class="math">\(\mathcal{R}\)</span> is a reward function where <span class="math">\(\mathcal{R}^a_s=E[R_{t+1} | S_t=s, A_t=a]\)</span>.</li>
+<li><span class="math">\(\gamma\)</span> is a discount factor where <span class="math">\(\gamma \in [0,1]\)</span>.</li>
+</ul>
+<p><span class="math">\(\mathcal{P}\)</span> obeys the Markov property which is where the name comes from.  Another important term to define is <span class="math">\(G_t\)</span> the cumulative reward from time-step <span class="math">\(t\)</span>.</p>
+<p>
+<div class="math">$$G_t=R_{t+1}+\gamma R_{t+2}+ ... = \sum^ \infty_{k=0} \gamma^k R_{t+k+1}$$</div>
+</p>
+<p>as you can see, future rewards are discounted by <span class="math">\(\gamma\)</span> meaning that immediate rewards are more valuable then those that come later.  Another important term is <span class="math">\(v(s)\)</span> the state-value function which defines the expected cumulative reward associated with each state in <span class="math">\(\mathcal{S}\)</span>.</p>
+<p>
+<div class="math">$$v(s)=E[G_t | S_t=s]$$</div>
+</p>
+<p>and if we subsitute the forumla for <span class="math">\(G_t\)</span> (ignoring actions for the moment)</p>
+<p>
+<div class="math">$$\begin{align}
+v(s) &amp;= E[R_{t+1}+\gamma R_{t+2}+ ... | S_t=s] \\
+&amp;= E[R_{t+1}+\gamma (R_{t+2}+ \gamma R_{t+3}...) | S_t=s] \\
+&amp;= E[R_{t+1}+\gamma G_{t+1} |S_t=s] \\
+&amp;= E[R_{t+1} +\gamma v(S_{t+1}) | S_t=s]
+\end{align}$$</div>
+</p>
+<p>The above expectation is with respect to the state transition matrix <span class="math">\(\mathcal{P}\)</span> which gives us</p>
+<p>
+<div class="math">$$v(s)=R_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}_{ss'} v(s')$$</div>
+</p>
+<p>This is known as the <em>Bellman equation</em>.  It decomposes the value function into the immediate reward <span class="math">\(R_s\)</span> and the discounted value of the possible successor states <span class="math">\(\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}_{ss'} v(s')\)</span>.  (Note: Some texts have the reward depend on the successor state (i.e. <span class="math">\(R^a_{ss'}\)</span>).  In this case, the reward would be a random variable governed by the transition probability matrix.  Here we are not taking the successor state into account with respect to the reward - meaning the reward is completely dependent upon the state you are in and therefore not a random variable).</p>
+<p>The last term that we must define is a policy <span class="math">\(\pi\)</span> which is a distribution over actions given states.</p>
+<p>
+<div class="math">$$\pi(a | s)=P[A_t=a | S_t =s]$$</div>
+</p>
+<p>Therefore, a policy determines which action to take at each state of the MDP. </p>
+<p>The transition matrix for a given policy <span class="math">\(\mathcal{P}^{\pi}_{ss'}\)</span> must take into account both the policy's action probability as well as the probability of that action actually being successful in the environment.</p>
+<p>
+<div class="math">$$\mathcal{P}^{\pi}_{ss'}=\sum_{a \in \mathcal{A}}\pi(a|s)\mathcal{P}^a_{ss'}$$</div>
+</p>
+<p>and similarly for the a given policy's reward</p>
+<p>
+<div class="math">$$\mathcal{R}^{\pi}_s=\sum_{a \in \mathcal{A}} \pi(a|s)\mathcal{R}^a_s$$</div>
+</p>
+<p>Therefore, the <em>Bellman equation</em> for a given policy <span class="math">\(\pi\)</span> is</p>
+<p>
+<div class="math">$$v_{\pi}(s)=R^{\pi}_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}^{\pi}_{ss'} v_{\pi}(s')$$</div>
+</p>
+<p>There are generally two problems associated with MDPs</p>
+<ul>
+<li><strong>Prediction: </strong> Given an MDP <span class="math">\(\langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}, \gamma \rangle\)</span> and a policy <span class="math">\(\pi\)</span>, compute the action-value function <span class="math">\(v_{\pi}(s)\)</span>.</li>
+<li><strong>Control:</strong> Given an MDP <span class="math">\(\langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}, \gamma \rangle\)</span>, compute the optimal policy <span class="math">\(\pi_*\)</span>.</li>
+</ul>
+<p>Policy iteration and value iteration are algorithms that can be used to solve these two MDP problems.</p>
+<h1>Policy Iteration</h1>
+<p>At first it seems like the prediction problem can be solved trivially by solving for <span class="math">\(v_{\pi}\)</span>.  If we put the <em>Bellman equation</em> in matrix form this amounts to</p>
+<p>
+<div class="math">$$
+\begin{align}
+\mathbf{v}_{\pi}&amp;=\mathbf{\mathcal{R}^{\pi}}+\gamma \mathbf{\mathcal{P}^{\pi}}\mathbf{v}_{\pi}\\
+&amp;= (I-\gamma \mathbf{\mathcal{P}^{\pi}})^{-1}\mathbf{\mathcal{R}^{\pi}}
+\end{align}$$</div>
+</p>
+<p>The problem with this approach is that it is <span class="math">\(O(n^3)\)</span> for an MDP with <span class="math">\(n\)</span> states which makes it practical for only small MDPs.  Fortunately, we can do better than <span class="math">\(O(n^3)\)</span> by using dynamic programming.  The <em>Bellman equation</em> is well-suited for dynamic programming because it allows us to reuse previous solutions.  Policy iteration is a dynamic programming algorithm that is used to solve both the prediction and control problems.  Policy iteration iterates between two steps - policy evaluation and policy improvement - until convergence at which point we are left with the optimal policy <span class="math">\(\pi_*\)</span> which can be evaluated to obtain the optimal value function <span class="math">\(v_{\pi*}\)</span>.</p>
+<h3>1. Policy Evaluation</h3>
+<p>The policy evaluation step is itself an iterative algorithm in which the value function <span class="math">\(v_{\pi}\)</span> for a given policy <span class="math">\(\pi\)</span> is computed.  <span class="math">\(v_{\pi}\)</span> is initialized randomly, then for each state <span class="math">\(s \in \mathcal{S}\)</span>, <span class="math">\(v_{\pi}(s)\)</span> is updated using the <em>Bellman equation</em></p>
+<p>
+<div class="math">$$v_{\pi}(s) \leftarrow R^{\pi}_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}^{\pi}_{ss'} v_{\pi}(s')$$</div>
+</p>
+<p>Eventually this converges to the correct <span class="math">\(v_{\pi}\)</span>.</p>
+<h3>2. Policy Improvement</h3>
+<p>The newly evaluated value function is then used to improve the current policy in yet another iterative step called policy improvement.  Again we iterate over each state <span class="math">\(s \in \mathcal{S}\)</span> and we greedily assign the policy action corresponding to the action that maximizes the <em>Bellman equation</em> for that state.</p>
+<p>
+<div class="math">$$\pi(s) \leftarrow \arg\max_{a \in \mathcal{A}} R^{a}_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}^{a}_{ss'} v_{\pi}(s')$$</div>
+</p>
+<p>Again, these greedy updates are performed until the policy converges. </p>
+<p>In summary, we begin with a random policy and iteratively perform policy evaluation and policy improvement until we converge to the optimal policy <span class="math">\(\pi_*\)</span>.  The following pseudocode illustrates policy iteration in its entirety.</p>
+<p><img alt="policy iteration" src="images/policy_iteration.png" title="=10x" /> </p>
+<p>Policy iteration is <span class="math">\(O(nm^2)\)</span> per iteration (it takes surprisingly few iterations to converge) which is a significant improvement upon the naive approach.</p>
+<h1>Value Iteration</h1>
+<p>Value iteration is similar to policy iteration with one slight change.  The policy evaluation step is the most computationally intense because it may take several passes through the state space before it converges.  What value iteration does is it truncates the policy evaluation step to only take a single pass through the state space to <em>approximate</em> the true value function.  Value iteration still has the same convergence guarantees as policy iteration but can often converge faster due to its truncated policy evaluation step.  The pseudocode for value iteration is presented below.</p>
+<p><img alt="value iteration" src="images/value_iteration.png" title="=20x" /> </p>
+<h1>Gridworld Code Demo</h1>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        <section id="extras" >
+       
+        
+        </section><!-- /#extras -->
+	
+        <footer id="contentinfo" >
+                <address id="about" class="vcard ">
+                Proudly powered by <a href="http://getpelican.com/" target="_blank">Pelican</a>, which takes
+                great advantage of <a href="http://python.org" target="_blank">Python</a>. &copy; <a class="url fn" href="http://launchyard.com">LaunchYard</a>
+		
+                </address><!-- /#about -->
+		
+
+                
+        </footer><!-- /#contentinfo -->
+
+<script type="text/javascript">
+    var disqus_shortname = 'alexminnaar';
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = 'http://' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+</script>
+</body>
+</html>

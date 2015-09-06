@@ -30,7 +30,7 @@
 	      <div class="LaunchyardDetail"><p><a href="/"></a>
 <a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
 <br/>
-Machine Learning at University College London. Natural language processing at VerticalScope.
+Machine Learning at University College London. Research Engineer at Nitro.
 <br/>
 <br/>
 <a href="mailto:minnaaralex@gmail.com">Email</a><br />
@@ -43,7 +43,8 @@ Machine Learning at University College London. Natural language processing at Ve
 			<h3>Categories</h3>
 			<div align="left">
 			<ul>
-				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/nlp.html">Topic Modeling</a></li>
+                <li><a href="/tag/deep-learning.html">Deep Learning</a></li>
 				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
 				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
 				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
@@ -51,6 +52,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="implementing-distbelief-with-akka.html">Implementing the DistBelief Deep Neural Network Training Framework with Akka</a><br /><br />
                 <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
                 <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
                 <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
@@ -65,6 +67,98 @@ Machine Learning at University College London. Natural language processing at Ve
 
 </div>
 
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-2.html">Facebook Recruiting III Keyword Extraction - Part 2</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-09-20T00:00:00+02:00">
+          on&nbsp;Fri 20 September 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><p>Before any serious analysis can be done, we must make sure that the dataset is in the optimal form to do so.  The raw data has two problems associated with it.</p>
+<ol>
+<li>The file is huge!  Once unzipped the training set (called Train.csv) is 7.3 GB.  Depending on your machine this could be too large to hold in main memory.  Even then, the sheer size of the data could make analysis restrictive.</li>
+<li>The file is full of irrelevant information (essentially noise).  The purpose of the competition is to build a model that can transform the input (post titles and bodies) into tags.  However, words like "the", "at", "a", etc. will very likely not have any influence in any model.
+The good news is that these two problems are related to each other.  Removing irrelevant information will also reduce the file size.  This can be done through a data preprocessing phase.</li>
+</ol>
+<h2>Data Preprocessing</h2>
+<p>So we need to remove the irrelevant information from the title and body columns in the training set.  Post titles and post bodies are inherently different in many ways so we will deal with them both separately.</p>
+<h3>Post Titles</h3>
+<p>We will first deal with the post titles.  The first thing we must figure out is how to decide which words are irrelevant and which words are important.</p>
+<p>Which words are important (and which are not)?</p>
+<p>Common sense tells us that stop-words (i.e. words like  "the", "at", "a", etc.) are not important, so there is no question that these words should be removed.  We also know that words that are also tag-words are very important.  For example, if the word "c++" appears in a post title, it is very likely that "c++" will also appear as a tag in that post.</p>
+<p>So now we know which words are important and which are not.  But what about the words in between? (i.e. words that are not stop-words but also are not tag-words).  It is difficult to say how important these words are.  If we remove all words except tag-words, the file will become a lot smaller (good), however we might be removing too much information which would hurt the performance of any model we create.</p>
+<p>At this point it is probably best to leave these words in.  Perhaps we can consider removing them later if the file is still too large to handle.  The following table shows the result of removing stop-words.  Note:  the original file contained only the post titles and ids.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>File Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>nothing (original file)</td>
+<td>367.3 MB</td>
+</tr>
+<tr>
+<td>removing stop-words #1</td>
+<td>317.3 MB</td>
+</tr>
+<tr>
+<td>removing stop-words #2</td>
+<td>308.0 MB</td>
+</tr>
+</tbody>
+</table>
+<p>where removing stop-words #1 is removing the usual stop-words and removing stop-words #2 is removing stop-words that are more specific to question asking (i.e. "how", "what", "why", etc.).  So we have removed about 60 MB from the post titles without loosing information.  Hooray!</p>
+<h3>Post Bodies</h3>
+<p>The post bodies are much more difficult to deal with for the following reasons.</p>
+<p>They make up the bulk of the training set.  The file containing only post bodies and ids is 6.7 GB.
+The post bodies are in HTML format complete with HTML tags that make it very messy.
+If that weren't enough, the bodies contain both English sentences and code and we must find a way to differentiate between the two.
+In order to reduce the size of this large dataset we have to make some simplifying assumptions.  There is really no way around this if you want to get the data set into a manageable size.</p>
+<h3>Simplifying assumptions</h3>
+<p>The first simplifying assumptions that we will make is that all of the information that is needed in order to build our model is contained in the text part of the post body and the code part is superfluous.  I think that this is a fair assumption, and even if it weren't true I do not think it would be plausible to extract meaningful information from the code portion of the body that would help us with the model.</p>
+<p>Therefore, we will remove all of the code from the post bodies.  This is a relatively straight-forward task because all of the code is enclosed in "code" tags.  You could use a Python package like BeautifulSoup to extract everything in the "code" tags.  The link text enclosed in "a" tags should also be removed for the same reason.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>File Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>nothing (original file)</td>
+<td>6.7 GB</td>
+</tr>
+<tr>
+<td>remove everything in "code" and "a" tags</td>
+<td>3.29 GB</td>
+</tr>
+<tr>
+<td>removing all other tags</td>
+<td>3.19 GB</td>
+</tr>
+</tbody>
+</table>
+<p>As you can see removing the code and link text has cut the size of the post bodies in half!  This is will be a huge benefit for future computation.</p>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
         
         
 

@@ -30,7 +30,7 @@
 	      <div class="LaunchyardDetail"><p><a href="/"></a>
 <a class="title" href="http://alexminnaar.github.io/">Alex Minnaar</a>
 <br/>
-Machine Learning at University College London. Natural language processing at VerticalScope.
+Machine Learning at University College London. Research Engineer at Nitro.
 <br/>
 <br/>
 <a href="mailto:minnaaralex@gmail.com">Email</a><br />
@@ -43,7 +43,8 @@ Machine Learning at University College London. Natural language processing at Ve
 			<h3>Categories</h3>
 			<div align="left">
 			<ul>
-				<li><a href="/tag/nlp.html">NLP & Topic Models</a></li>
+				<li><a href="/tag/nlp.html">Topic Modeling</a></li>
+                <li><a href="/tag/deep-learning.html">Deep Learning</a></li>
 				<li><a href="/tag/supervised-learning.html">Supervised Learning</a></li>
 				<li><a href="/tag/bayesian-inference.html">Bayesian Inference</a></li>
 				<li><a href="/tag/kaggle-competitions.html">Kaggle Competitions</a></li>
@@ -51,6 +52,7 @@ Machine Learning at University College London. Natural language processing at Ve
 			</ul>
 			</div>
               <h3>Recent Posts</h3>
+                <a href="implementing-distbelief-with-akka.html">Implementing the DistBelief Deep Neural Network Training Framework with Akka</a><br /><br />
                 <a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a><br /><br />
                 <a href="word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a><br /><br />
                 <a href="distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a><br /><br />
@@ -72,6 +74,590 @@ Machine Learning at University College London. Natural language processing at Ve
             <aside id="featured">
                 <div class="body">
                     <article>
+                        <h1 class="entry-title"><a href="/implementing-the-distbelief-deep-neural-network-training-framework-with-akka.html">Implementing the DistBelief Deep Neural Network Training Framework with Akka</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-09-06T00:00:00+02:00">
+          on&nbsp;Sun 06 September 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
+</div><!-- /.post-info --><p>Presently, most deep neural networks are trained using GPUs due to the enormous number of parallel computations that they can perform.  Without the speed-ups provided by GPUs, deep neural netwroks could take days or even weeks to train on a single machine.  However, using GPUs can be prohitive for several reasons</p>
+<ul>
+<li>GPUs are expensive, both to buy and to rent.</li>
+<li>Most GPUs can only hold a relatively small amount of data in memory.</li>
+<li>CPU-to-GPU data transfer is very slow.  Depending on your application it can be so slow that it actually negates the speed-up that the GPU provides.</li>
+<li>The CUDA GPU programming library is written in low-level C which many programmers are not experienced with (however there are many deep learning libraries written in high level languages with GPU capabilities e.g. <em>Theano</em>, <em>Torch</em>, <em>Caffe</em>, etc.).</li>
+</ul>
+<p><em>DistBelief</em> is a framework for training deep neural networks that avoids GPUs entirely (for the above reasons) and instead performs parallel computing with clusters of commodity machines.  <em>DistBelief</em> was first presented in the 2012 paper "<em>Large Scale Distributed Deep Networks</em>" by <em>Dean et al.</em>  In this paper, the <a href="http://select.cs.cmu.edu/code/graphlab/">GraphLab</a> distributed computing framework was used to implement <em>DistBelief</em>.  As we shall see later in this post, <em>DistBelief</em> relies heavily on asynchronous message passing which makes the <a href="http://akka.io/">Akka actor framework</a> a suitable alternative.  This post will describe how to implement the <em>DistBelief</em> framework using Akka (all code is in <a href="https://github.com/alexminnaar/AkkaDistBelief">this github repo</a>).  This post will be divided into five sections</p>
+<ol>
+<li>A brief overview of how neural networks are trained using the backpropagation algorithm.</li>
+<li>A brief overview of how Akka handles asynchronous message passing.</li>
+<li>How the <em>DistBelief</em> framework trains deep neural networks using the distributed, asynchronous <em>Downpour SGD</em> algorithm.</li>
+<li>How <em>Downpour SGD</em> can be implemented using Akka.</li>
+<li>Finally, a demo applying <em>DistBelief</em> to the classic XOR function problem.</li>
+</ol>
+<p>Let's get started!</p>
+<h1>1. The Backpropagation Algorithm</h1>
+<p>This section is only meant to be a brief overview of the backpropagation algorithm (there are a multitude of online resources available if you want to learn more).  Consider the following 3-layer neural network.</p>
+<p><img alt="neural network" src="images/neural_network_example.png" title="=10x" /></p>
+<p>The 3 layers are called the <em>input layer</em>, the <em>hidden layer</em> and the <em>output layer</em>.  Each layer consists of a number of nodes that are called <em>neural units</em>. Each <em>neural unit</em> in the input layer is connected to every <em>neural unit</em> in the hidden layer via a weight (these are illustrated by the arrows in the above diagram).  The <em>neural units</em> in the input layer correspond to the elements of the input vector for a given training example.  The input to a <em>neural unit</em> in the hidden layer is the weighted sum of its inputs coming from the input layer. This weighted sum is then passed through a non-linearity function (e.g. <em>sigmoid</em>, <em>tanh</em>, <em>reLu</em>, etc.) to get the output of the <em>neural unit</em>.  The process is then repeated between the hidden and output layers to get the final output/prediction.  In the above example, the input is a 4-dimensional vector and the output is a scalar.</p>
+<p>Training a neural network refers to the process of finding the optimal layer weights that map the inputs to the outputs in a given data set.  This is done via the backpropagation algorithm which consists of two steps.</p>
+<ul>
+<li>A <strong>forward pass</strong> to compute the output for a given input with the current network weights which gives us the predicted output.  We compare the predicted output to the actual output to get the prediction error. </li>
+<li>A <strong>backward pass</strong> to compute the gradients of the layer weights with respect to the prediction error.</li>
+</ul>
+<p>Once we have these gradients we can use an optimization algorithm of our choosing to update the layer weights.  The most commonly used algorithm is stochastic gradient descent (others include <em>Adagrad</em>, <em>L-BFGS</em>, <em>momentum SDG</em>, etc.).</p>
+<h3>The Forward Pass</h3>
+<p>Let <span class="math">\(\mathbf{W}_{l,k}\)</span> be the matrix of weights between layer <span class="math">\(l\)</span> and layer <span class="math">\(k\)</span> of an arbitrary neural network i.e. the <span class="math">\((i,j)^{th}\)</span> entry of <span class="math">\(\mathbf{W}_{l,k}\)</span> is the weight from the <span class="math">\(i^{th}\)</span> unit of layer <span class="math">\(l\)</span> to the <span class="math">\(j^{th}\)</span> unit of layer <span class="math">\(k\)</span>.  Also, let <span class="math">\(\mathbf{x}\)</span> be the output of layer <span class="math">\(l\)</span>  (therefore the dimension of <span class="math">\(\mathbf{x}\)</span> is equal to the number of <em>neural units</em> in layer <span class="math">\(l\)</span>).  The output of layer <span class="math">\(k\)</span> is computed in the following way</p>
+<p>
+<div class="math">$$\mathbf{y}_k=\mathbf{W}_{l,k}^T \cdot \mathbf{x}_l$$</div>
+</p>
+<p>Then the output is passed through a nonlinearity function <span class="math">\(\sigma\)</span></p>
+<p>
+<div class="math">$$\mathbf{x}_k=\sigma(y)$$</div>
+</p>
+<p>which then acts as the input for the next layer.  </p>
+<p>The forward pass begins at the input layer with the input of the training example acting as the output of the input layer and the above process is repeated for all layers until the output layer is reached at which point we obtain our prediction.  The prediction error is simply the difference between the prediction and the target output of the training example.</p>
+<h3>The Backward Pass</h3>
+<p>The backward pass is slightly more complicated.  We begin with the prediction error from the forward pass which we call <span class="math">\(\delta_o\)</span>.  Then working backwards from layer <span class="math">\(k\)</span> to layer <span class="math">\(l\)</span> we compute</p>
+<p>
+<div class="math">$$\delta_l = \sigma'(\mathbf{y}_l) \odot (\mathbf{W}^T_{l,k} \cdot \delta_k)$$</div>
+</p>
+<p>where <span class="math">\(\sigma'\)</span> is the derivative of the activation function and <span class="math">\(\odot\)</span> is the elementwise (<em>Hadamard</em>) product. Then the gradients corresponding to the weights in the matrix <span class="math">\(\mathbf{W}_{l,k}\)</span> are computed by</p>
+<p>
+<div class="math">$$\nabla_{l,k}=\mathbf{x_l} \cdot \delta_k$$</div>
+</p>
+<p>Therefore, the <span class="math">\(\delta\)</span>'s are passed backwards in the backward pass analogously to how the <span class="math">\(\mathbf{x}\)</span>'s are passed forwards in the forward pass.  Note how the <span class="math">\(\mathbf{y}\)</span>'s and <span class="math">\(\mathbf{x}\)</span>'s have already been computed in the forward pass, so there is no need to recompute them.</p>
+<h3>The Weight Updates</h3>
+<p>Given the gradient <span class="math">\(\nabla_{l,k}\)</span> from the backward pass, we can update the weights <span class="math">\(\mathbf{W}_{l,k}\)</span> via the stochastic graident descent equation</p>
+<p>
+<div class="math">$$\mathbf{W}_{l,k}=\mathbf{W}_{l,k} - \eta \cdot \nabla_{l,k}$$</div>
+</p>
+<p>Where <span class="math">\(\eta \in (0,1)\)</span> is the step-size.</p>
+<h1>2. The Akka Actor System</h1>
+<p>Akka is a framework for concurrent programming written in Scala (again, this is a brief overview and there are many other learning resources available online).  Concurrent programming introduces several problems relating to thread safety.  For example, consider a program that holds a mutable state variable.  In a multithreaded environment, multiple threads can access and change this state variable at any time, meaning that no thread can be sure what the value of this variable is after it was initially read.  One way to solve this is with thread synchronization where only one thread can access the state variable at a time.  However, this introduces a new set of problems such as <em>dead-locks</em> and overly-complicated code.  Akka has solved this problem by introducing entities known as actors which encapsulate the mutable state variables and communicate with each other asynchronously via message passing.  If a mutable state needs to be accessed or changed, a message is sent to its corresponding actor.  An actor's incoming messages are placed in a queue which the actor processes sequentially.  It is asynchronous because actors send messages without waiting for a response from the receiving actor leaving them free to perform other tasks i.e. they are non-blocking.  Furthermore, actors can live on different machines with messages being passed across a network without any loss of generality (actors are distributed!).</p>
+<h1>3. DistBelief and Downpour SGD</h1>
+<p>As stated previously, <em>DistBelief</em> is a framework for training deep neural networks in a distributed fashion using clusters of machines rather than GPUs.  The particular distributed training algorithm it uses is called <em>Downpour SGD</em>.  <em>Downpour SGD</em> utilizes two levels of parallelism</p>
+<ul>
+<li><strong>Data Parallelism:</strong> The training data is paritioned across several machines each having its own replica of the model.  Each model trains with its partition of the data in parallel.</li>
+<li><strong>Model Parallelism:</strong>  The layers of each model replica are distributed across machines.</li>
+</ul>
+<p>To describe <em>Downpour SGD</em> in greater detail, let's start with the data partitions.  The data paritions (called <em>data shards</em> in the original paper) each train their own model replica with their partition of the data (i.e. one model replica per data shard).  Furthermore, each model replica is partitioned across machines by layer.  The weights for the model are held in a central parameter server which is also paritioned across multiple machines.  Each parameter partition holds the weights for one layer of the model (for example, if the model replicas have 3 layers, then the parameter server has 2 partitions for the weights from layer 1 to layer 2 and the weights from layer 2 to layer 3 respectively).  Therefore, as the model replicas are trained in parallel, they <em>asynchronously</em> read (in the forward pass) and update (in the backward pass) their corresponding weight parameters. This means that the weight parameter that a model replica layer reads may have been previously updated by the same layer from a different model replica.</p>
+<p>This process can be more easily understood with the following diagram.</p>
+<p><img alt="downpour sgd" src="images/downpour_sgd.png" title="=5x" /></p>
+<p>The above diagram shows the models replicas for each data shard which are themselves paritioned (as illustrated by the blue grid squares).  And each replica communicates asynchronously with the central parameter server which is also partitioned across machines (shown by the green grid squares).</p>
+<h1>4. Implementing Downpour SGD with Akka</h1>
+<p>From the previous section on <em>Downpour SGD</em>, we know that there is asynchronous communication between the model replicas and the parameter shards.  Also, from section 2, we know that Akka was built for dealing with asynchronous message passing which makes <em>Downpour SGD</em> and Akka a great match!  This section describes how <em>Downpour SGD</em> can be implemented using Akka.  All of the following code was taken from <a href="https://github.com/alexminnaar/AkkaDistBelief">this github repo</a>.</p>
+<h3>The Parameter Shard Actor</h3>
+<p>Let's start with the central parameter server.  Again, the parameter server is partitioned across machines with each partition corresponding to a layer of the neural network model.  As you might expect, we can represent each partition as an Akka actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">ParameterShard</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">ParameterRequest</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">LatestParameters</span><span class="o">(</span><span class="n">weights</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">ParameterShard</span><span class="o">(</span><span class="n">shardId</span><span class="k">:</span> <span class="kt">Int</span>
+                     <span class="o">,</span> <span class="n">learningRate</span><span class="k">:</span> <span class="kt">Double</span>
+                     <span class="o">,</span> <span class="n">initialWeight</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.ParameterShard._</span>
+
+  <span class="k">var</span> <span class="n">latestParameter</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="n">initialWeight</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">ParameterRequest</span> <span class="k">=&gt;</span> <span class="n">context</span><span class="o">.</span><span class="n">sender</span><span class="o">()</span> <span class="o">!</span> <span class="nc">LatestParameters</span><span class="o">(</span><span class="n">latestParameter</span><span class="o">)</span>
+    <span class="k">case</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">g</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">latestParameter</span> <span class="k">=</span> <span class="n">latestParameter</span> <span class="o">+</span> <span class="o">(</span><span class="n">g</span><span class="o">.</span><span class="n">t</span> <span class="o">*</span> <span class="n">learningRate</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+</pre></div>
+
+
+<p>The code above is fairly straight-forward.  When the parameter shard actor is first created it is given a unique <code>shardId</code>, a learning rate for the update step, and a random intial weight.  When a model replica layer requests the latest parameter values, the actor sends them back to the replica layer wrapped in a <code>LatestParameters</code> message.  If a gradient message is received, then the actor uses the gradient to update its parameters.</p>
+<h3>The Data Shard Actor</h3>
+<p>Each data partition can also be represented as an actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">DataShard</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">ReadyToProcess</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">FetchParameters</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">DataShard</span><span class="o">(</span><span class="n">shardId</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span>
+                <span class="n">trainingData</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">Example</span><span class="o">],</span>
+                <span class="n">activation</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+                <span class="n">activationDerivative</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+                <span class="n">parameterShards</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">])</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.DataShard._</span>
+
+  <span class="k">val</span> <span class="n">numLayers</span> <span class="k">=</span> <span class="n">parameterShards</span><span class="o">.</span><span class="n">size</span>
+  <span class="k">val</span> <span class="n">outputActor</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">OutputActor</span><span class="o">))</span>
+  <span class="k">val</span> <span class="n">trainingDataIterator</span> <span class="k">=</span> <span class="n">trainingData</span><span class="o">.</span><span class="n">toIterator</span>
+  <span class="k">val</span> <span class="n">layers</span><span class="k">:</span> <span class="kt">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">](</span><span class="n">numLayers</span><span class="o">)</span>
+
+  <span class="k">for</span> <span class="o">(</span><span class="n">l</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="n">layers</span><span class="o">(</span><span class="n">l</span><span class="o">)</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">Layer</span><span class="o">(</span>
+      <span class="n">shardId</span>
+      <span class="o">,</span> <span class="n">l</span>
+      <span class="o">,</span> <span class="n">activation</span>
+      <span class="o">,</span> <span class="n">activationDerivative</span>
+      <span class="o">,</span> <span class="k">if</span> <span class="o">(</span><span class="n">l</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="nc">Some</span><span class="o">(</span><span class="n">layers</span><span class="o">(</span><span class="n">l</span> <span class="o">-</span> <span class="mi">1</span><span class="o">))</span> <span class="k">else</span> <span class="nc">None</span> <span class="c1">//parent layer actor</span>
+      <span class="o">,</span> <span class="n">parameterShards</span><span class="o">(</span><span class="n">l</span><span class="o">)</span>
+      <span class="o">,</span> <span class="k">if</span> <span class="o">(</span><span class="n">l</span> <span class="o">==</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="nc">Some</span><span class="o">(</span><span class="n">outputActor</span><span class="o">)</span> <span class="k">else</span> <span class="nc">None</span><span class="o">)))</span> 
+
+    <span class="k">if</span> <span class="o">(</span><span class="n">l</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="n">layers</span><span class="o">(</span><span class="n">l</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span> <span class="o">!</span> <span class="nc">MyChild</span><span class="o">(</span><span class="n">layers</span><span class="o">(</span><span class="n">l</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="k">var</span> <span class="n">layersNotUpdated</span> <span class="k">=</span> <span class="o">(</span><span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">).</span><span class="n">toSet</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">ReadyToProcess</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">layers</span><span class="o">.</span><span class="n">foreach</span><span class="o">(</span><span class="k">_</span> <span class="o">!</span> <span class="nc">FetchParameters</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">waitForAllLayerUpdates</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">waitForAllLayerUpdates</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">DoneFetchingParameters</span><span class="o">(</span><span class="n">layerId</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="n">layersNotUpdated</span> <span class="o">-=</span> <span class="n">layerId</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">layersNotUpdated</span><span class="o">.</span><span class="n">isEmpty</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">trainingDataIterator</span><span class="o">.</span><span class="n">hasNext</span><span class="o">)</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">dataPoint</span> <span class="k">=</span> <span class="n">trainingDataIterator</span><span class="o">.</span><span class="n">next</span><span class="o">()</span>
+          <span class="n">layers</span><span class="o">.</span><span class="n">head</span> <span class="o">!</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">dataPoint</span><span class="o">.</span><span class="n">x</span><span class="o">,</span> <span class="n">dataPoint</span><span class="o">.</span><span class="n">y</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">context</span><span class="o">.</span><span class="n">parent</span> <span class="o">!</span> <span class="nc">Done</span><span class="o">(</span><span class="n">shardId</span><span class="o">)</span>
+          <span class="n">context</span><span class="o">.</span><span class="n">stop</span><span class="o">(</span><span class="n">self</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="n">layersNotUpdated</span> <span class="k">=</span> <span class="o">(</span><span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">).</span><span class="n">toSet</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">unbecome</span><span class="o">()</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The above actor is doing several things.  First, since each data shard has its own model replica, the data shard actor creates the layer actors (these will be explained next) for its replica.  Once the model actors are created, the data shard waits to receive the <code>ReadyToProcess</code> message at which point a <code>FetchParameters</code> message is sent to each layer actor in the replica which tells them to retrieve the latest version of their weight parameters from their corresponding parameter shards.  At this point, the actor enters a waiting context until each of its layer actors has successfully updated its parameters.  Once this happens, the actor can send the first data point to the input layer of its replica for processing.  When the backpropagation process has finished for that data point, the actor will again receive the <code>ReadyToProcess</code> message and the process will repeat.  Once the actor has processed all of its data points, it is done and the actor stops itself.</p>
+<h3>The Neural Network Layer Actor</h3>
+<p>Next we will describe the model replica layer actor that is created within the <code>DataShard</code> actor.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">Layer</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">DoneFetchingParameters</span><span class="o">(</span><span class="n">layerId</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">g</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">inputs</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span> <span class="n">target</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">deltas</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">MyChild</span><span class="o">(</span><span class="n">ar</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">Layer</span><span class="o">(</span><span class="n">replicaId</span><span class="k">:</span> <span class="kt">Int</span>
+            <span class="o">,</span> <span class="n">layerId</span><span class="k">:</span> <span class="kt">Int</span>
+            <span class="o">,</span> <span class="n">activationFunction</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>
+            <span class="o">,</span> <span class="n">activationFunctionDerivative</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span>
+            <span class="o">,</span> <span class="n">parentLayer</span><span class="k">:</span> <span class="kt">Option</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span>
+            <span class="o">,</span> <span class="n">parameterShardId</span><span class="k">:</span> <span class="kt">ActorRef</span>
+            <span class="o">,</span> <span class="n">outputAct</span><span class="k">:</span> <span class="kt">Option</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">])</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.Layer._</span>
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.OutputActor.Output</span>
+
+  <span class="k">var</span> <span class="n">latestWeights</span><span class="k">:</span> <span class="kt">DenseMatrix</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="k">_</span>
+  <span class="k">var</span> <span class="n">activations</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="k">_</span>
+  <span class="k">var</span> <span class="n">activatedInput</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=</span> <span class="k">_</span>
+  <span class="k">var</span> <span class="n">childLayer</span><span class="k">:</span> <span class="kt">Option</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span> <span class="k">=</span> <span class="nc">None</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">FetchParameters</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">parameterShardId</span> <span class="o">!</span> <span class="nc">ParameterRequest</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">waitForParameters</span><span class="o">)</span>
+    <span class="o">}</span>
+
+    <span class="k">case</span> <span class="nc">MyChild</span><span class="o">(</span><span class="n">ar</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="n">childLayer</span> <span class="k">=</span> <span class="nc">Some</span><span class="o">(</span><span class="n">ar</span><span class="o">)</span>
+
+    <span class="k">case</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">inputs</span><span class="o">,</span> <span class="n">target</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="n">activatedInput</span><span class="k">=</span><span class="n">parentLayer</span> <span class="k">match</span> <span class="o">{</span>
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">p</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">.</span><span class="n">vertcat</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">),</span> <span class="n">activationFunction</span><span class="o">(</span><span class="n">inputs</span><span class="o">))</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">inputs</span>
+      <span class="o">}</span>
+
+      <span class="k">val</span> <span class="n">outputs</span> <span class="k">=</span> <span class="n">computeLayerOutputs</span><span class="o">(</span><span class="n">activatedInput</span><span class="o">,</span> <span class="n">latestWeights</span><span class="o">)</span>
+      <span class="k">val</span> <span class="n">activatedOutputs</span> <span class="k">=</span> <span class="n">activationFunction</span><span class="o">(</span><span class="n">outputs</span><span class="o">)</span>
+
+      <span class="n">activations</span> <span class="k">=</span> <span class="n">parentLayer</span> <span class="k">match</span><span class="o">{</span>
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">p</span><span class="o">)</span><span class="k">=&gt;</span><span class="nc">DenseVector</span><span class="o">.</span><span class="n">vertcat</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">),</span> <span class="n">inputs</span><span class="o">)</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">inputs</span>
+      <span class="o">}</span>
+
+      <span class="n">childLayer</span> <span class="k">match</span> <span class="o">{</span>
+
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">nextLayer</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+          <span class="n">nextLayer</span> <span class="o">!</span> <span class="nc">ForwardPass</span><span class="o">(</span><span class="n">outputs</span><span class="o">,</span> <span class="n">target</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">deltas</span> <span class="k">=</span> <span class="n">computePredictionError</span><span class="o">(</span><span class="n">activatedOutputs</span><span class="o">,</span> <span class="n">target</span><span class="o">)</span>
+          <span class="k">val</span> <span class="n">gradient</span> <span class="k">=</span> <span class="n">computeGradient</span><span class="o">(</span><span class="n">deltas</span><span class="o">,</span> <span class="n">activatedInput</span><span class="o">)</span>
+
+          <span class="n">parameterShardId</span> <span class="o">!</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">gradient</span><span class="o">)</span>
+          <span class="k">val</span> <span class="n">parentDeltas</span> <span class="k">=</span> <span class="n">computeDeltas</span><span class="o">(</span><span class="n">deltas</span><span class="o">,</span> <span class="n">activations</span><span class="o">,</span> <span class="n">latestWeights</span><span class="o">,</span> <span class="n">activationFunctionDerivative</span><span class="o">)</span>
+          <span class="n">context</span><span class="o">.</span><span class="n">sender</span><span class="o">()</span> <span class="o">!</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">parentDeltas</span><span class="o">)</span>
+          <span class="n">outputAct</span><span class="o">.</span><span class="n">get</span> <span class="o">!</span> <span class="nc">Output</span><span class="o">(</span><span class="n">replicaId</span><span class="o">,</span> <span class="n">activatedOutputs</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="k">case</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">childDeltas</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">val</span> <span class="n">gradient</span> <span class="k">=</span> <span class="n">computeGradient</span><span class="o">(</span><span class="n">childDeltas</span><span class="o">,</span> <span class="n">activatedInput</span><span class="o">)</span>
+      <span class="n">parameterShardId</span> <span class="o">!</span> <span class="nc">Gradient</span><span class="o">(</span><span class="n">gradient</span><span class="o">)</span>
+
+      <span class="n">parentLayer</span> <span class="k">match</span> <span class="o">{</span>
+        <span class="k">case</span> <span class="nc">Some</span><span class="o">(</span><span class="n">previousLayer</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+          <span class="k">val</span> <span class="n">parentDeltas</span> <span class="k">=</span> <span class="n">computeDeltas</span><span class="o">(</span><span class="n">childDeltas</span><span class="o">,</span> <span class="n">activations</span><span class="o">,</span> <span class="n">latestWeights</span><span class="o">,</span> <span class="n">activationFunctionDerivative</span><span class="o">)</span>
+          <span class="n">previousLayer</span> <span class="o">!</span> <span class="nc">BackwardPass</span><span class="o">(</span><span class="n">parentDeltas</span><span class="o">(</span><span class="mi">1</span> <span class="n">to</span> <span class="o">-</span><span class="mi">1</span><span class="o">))</span>
+        <span class="o">}</span>
+        <span class="k">case</span> <span class="k">_</span> <span class="k">=&gt;</span> <span class="n">context</span><span class="o">.</span><span class="n">parent</span> <span class="o">!</span> <span class="nc">ReadyToProcess</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="k">def</span> <span class="n">waitForParameters</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">LatestParameters</span><span class="o">(</span><span class="n">weights</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">latestWeights</span> <span class="k">=</span> <span class="n">weights</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">parent</span> <span class="o">!</span> <span class="nc">DoneFetchingParameters</span><span class="o">(</span><span class="n">layerId</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">unbecome</span><span class="o">()</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>A <code>Layer</code> actor can accept four messages</p>
+<ul>
+<li><strong>FetchParameters:</strong> When this message is received the actor sends a message to its corresponding parameter shard to get the latest version of its weights.  It then enters a waiting context until these wieghts are received at which point it returns to its default context.</li>
+<li><strong>MyChild:</strong> This message gives the layer actor the <code>actorRef</code> of its child layer.  This should happen immediately after the layer actor is created in the <code>DataShard</code> actor.  Obviously, if the layer is the output layer of the network then it will never receive this kind of message.</li>
+<li><strong>ForwardPass:</strong>  This message is received during the forward pass of the previously mentioned backpropagation algorithm.  It contains the outputs of the previous layer which are needed to compute the outputs of the current layer.  If the actor has a child layer (given by the <code>MyChild</code> message) it sends the same <code>ForwardPass</code> message to its child layer actor.  Alternatively, if this is the output layer of the neural network then the backwards pass is initialized by computing the prediction error as well as the <span class="math">\(\delta\)</span>'s and gradients for this layer.  The gradients are sent to the <code>ParameterShard</code> actor to asynchronously update the centralized weights.  Then we continue the backpropagation procedure by sending the <span class="math">\(\delta\)</span>'s to the current layer's parent layer actor wrapped in a <code>BackwardPass</code> message.</li>
+<li><strong>BackwardPass:</strong>  When the actor receives a <code>BackwardPass</code> message containing the <span class="math">\(\delta\)</span>'s from the  child layer, it uses them to compute the gradient of of the current layer (which is sent to the <code>ParameterShard</code> for updating) and also to compute the <span class="math">\(\delta\)</span>'s of the current layer which it passes to its parent layer if it exits.  If the parent layer does not exist (i.e. it is the input layer) then the backpropagation procedure is finished at which point the layer sends a <code>ReadyToProcess</code> message to its <code>DataShard</code> actor indicating that it is ready to process another data point. </li>
+</ul>
+<h3>The Master Actor</h3>
+<p>The <code>Master</code> actor is in control of the full data set and is responsible for kicking off the entire process.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">Master</span> <span class="o">{</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Done</span><span class="o">(</span><span class="n">dataShardId</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Start</span>
+<span class="o">}</span>
+
+<span class="k">class</span> <span class="nc">Master</span><span class="o">(</span><span class="n">dataSet</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">Example</span><span class="o">],</span>
+             <span class="n">dataPerReplica</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span>
+             <span class="n">layerDimensions</span><span class="k">:</span> <span class="kt">Seq</span><span class="o">[</span><span class="kt">Int</span><span class="o">],</span>
+             <span class="n">activation</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+             <span class="n">activationDerivative</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">]</span> <span class="k">=&gt;</span> <span class="nc">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">],</span>
+             <span class="n">learningRate</span><span class="k">:</span> <span class="kt">Double</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">import</span> <span class="nn">com.github.alexminnaar.AkkaDistBelief.actors.Master._</span>
+
+  <span class="k">val</span> <span class="n">numLayers</span> <span class="k">=</span> <span class="n">layerDimensions</span><span class="o">.</span><span class="n">size</span>
+  <span class="k">val</span> <span class="n">dataShards</span> <span class="k">=</span> <span class="n">dataSet</span><span class="o">.</span><span class="n">grouped</span><span class="o">(</span><span class="n">dataPerReplica</span><span class="o">).</span><span class="n">toSeq</span>
+  <span class="k">val</span> <span class="n">parameterShardActors</span><span class="k">:</span> <span class="kt">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">]</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Array</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">](</span><span class="n">numLayers</span> <span class="o">-</span> <span class="mi">1</span><span class="o">)</span>
+
+  <span class="k">for</span> <span class="o">(</span><span class="n">i</span> <span class="k">&lt;-</span> <span class="mi">0</span> <span class="n">to</span> <span class="n">numLayers</span> <span class="o">-</span> <span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">parameterShardActors</span><span class="o">(</span><span class="n">i</span><span class="o">)</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">ParameterShard</span><span class="o">(</span>
+      <span class="n">i</span>
+      <span class="o">,</span> <span class="n">learningRate</span>
+      <span class="o">,</span> <span class="nc">NeuralNetworkOps</span><span class="o">.</span><span class="n">randomMatrix</span><span class="o">(</span><span class="n">layerDimensions</span><span class="o">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="o">),</span> <span class="n">layerDimensions</span><span class="o">(</span><span class="n">i</span><span class="o">)+</span><span class="mi">1</span><span class="o">)</span>
+    <span class="o">)))</span>
+  <span class="o">}</span>
+
+  <span class="k">val</span> <span class="n">dataShardActors</span> <span class="k">=</span> <span class="n">dataShards</span><span class="o">.</span><span class="n">zipWithIndex</span><span class="o">.</span><span class="n">map</span> <span class="o">{</span> <span class="n">dataShard</span> <span class="k">=&gt;</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">DataShard</span><span class="o">(</span><span class="n">dataShard</span><span class="o">.</span><span class="n">_2</span>
+      <span class="o">,</span> <span class="n">dataShard</span><span class="o">.</span><span class="n">_1</span>
+      <span class="o">,</span> <span class="n">activation</span>
+      <span class="o">,</span> <span class="n">activationDerivative</span>
+      <span class="o">,</span> <span class="n">parameterShardActors</span><span class="o">)))</span>
+  <span class="o">}</span>
+
+  <span class="k">var</span> <span class="n">numShardsFinished</span> <span class="k">=</span> <span class="mi">0</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="nc">Start</span> <span class="k">=&gt;</span> <span class="n">dataShardActors</span><span class="o">.</span><span class="n">foreach</span><span class="o">(</span><span class="k">_</span> <span class="o">!</span> <span class="nc">ReadyToProcess</span><span class="o">)</span>
+
+    <span class="k">case</span> <span class="nc">Done</span><span class="o">(</span><span class="n">id</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">numShardsFinished</span> <span class="o">+=</span> <span class="mi">1</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">numShardsFinished</span> <span class="o">==</span> <span class="n">dataShards</span><span class="o">.</span><span class="n">size</span><span class="o">)</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;DONE!!!!!!!!!!!!!!!&quot;</span><span class="o">)</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The <code>Master</code> actor partitions the data and creates a <code>DataShard</code> actor for each partition.  The <code>Master</code> actor also creates <code>ParameterShard</code> actors for each layer weight in the model (remember the model is replicated but there is only one set of parameters that each of them read and update).  The entire process begins when the <code>Start</code> message is received.  It ends when all of the <code>DataShard</code> actors have finished processing all of their data points.</p>
+<h1>5. Demo: Learning the XOR Function</h1>
+<p>The XOR function is defined by the following truth table.</p>
+<p><img alt="xor table" src="images/xorTT.png" title="=5x" /></p>
+<p>Even though this looks like a simple function, learning the XOR function (i.e. being able to predict the correct XOR output given an XOR input) is a classic problem in machine learning because the data points are not <em>linearly separable</em>.  This is clearly illustrated by plotting the function.</p>
+<p><img alt="xor function" src="images/xorgraph.gif" title="=5x" /></p>
+<p>From the above graph you can see that there is no line that can separate the <span class="math">\(1\)</span> outputs from the <span class="math">\(0\)</span> outputs.  Therefore, no linear classifier can solve this problem (e.g. logistic regression cannot solve this).  However, a multilayer perceptron (a neural network with a hidden layer) can learn non-linear functions. In fact, a multilayer perceptron can learn virtually any non-linear function given a sufficient number of <em>neural units</em> in its hidden layer.  Therefore, the XOR function is a great test for our Akka implementation of <em>DistBelief</em>.</p>
+<p>The following actor applies <em>DistBelief</em> to the XOR problem</p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">XOR</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+
+  <span class="k">val</span> <span class="n">random</span> <span class="k">=</span> <span class="k">new</span> <span class="nc">Random</span>
+
+  <span class="k">val</span> <span class="n">possibleExamples</span> <span class="k">=</span> <span class="nc">Seq</span><span class="o">(</span>
+    <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">0.0</span><span class="o">))</span>
+    <span class="o">,</span> <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">))</span>
+    <span class="o">,</span> <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">,</span> <span class="mf">0.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">))</span>
+    <span class="o">,</span> <span class="nc">Example</span><span class="o">(</span><span class="nc">DenseVector</span><span class="o">(</span><span class="mf">1.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">,</span> <span class="mf">1.0</span><span class="o">),</span> <span class="nc">DenseVector</span><span class="o">(</span><span class="mf">0.0</span><span class="o">))</span>
+  <span class="o">)</span>
+
+  <span class="k">val</span> <span class="n">trainingSet</span> <span class="k">=</span> <span class="o">(</span><span class="mi">1</span> <span class="n">to</span> <span class="mi">50000</span><span class="o">).</span><span class="n">foldLeft</span><span class="o">(</span><span class="nc">Seq</span><span class="o">[</span><span class="kt">Example</span><span class="o">]())</span> <span class="o">{</span> <span class="o">(</span><span class="n">a</span><span class="o">,</span> <span class="n">c</span><span class="o">)</span> <span class="k">=&gt;</span>
+    <span class="n">a</span> <span class="o">:+</span> <span class="n">possibleExamples</span><span class="o">(</span><span class="n">random</span><span class="o">.</span><span class="n">nextInt</span><span class="o">(</span><span class="n">possibleExamples</span><span class="o">.</span><span class="n">size</span><span class="o">))</span>
+  <span class="o">}</span>
+
+  <span class="k">val</span> <span class="nc">DistBeliefMaster</span> <span class="k">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">Props</span><span class="o">(</span><span class="k">new</span> <span class="nc">Master</span><span class="o">(</span>
+    <span class="n">trainingSet</span>
+    <span class="o">,</span> <span class="mi">2000</span>
+    <span class="o">,</span> <span class="nc">Seq</span><span class="o">(</span><span class="mi">2</span><span class="o">,</span> <span class="mi">2</span><span class="o">,</span> <span class="mi">1</span><span class="o">)</span>
+    <span class="o">,</span> <span class="o">(</span><span class="n">x</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">el</span> <span class="k">=&gt;</span> <span class="n">sigmoid</span><span class="o">(</span><span class="n">el</span><span class="o">))</span>
+    <span class="o">,</span> <span class="o">(</span><span class="n">x</span><span class="k">:</span> <span class="kt">DenseVector</span><span class="o">[</span><span class="kt">Double</span><span class="o">])</span> <span class="k">=&gt;</span> <span class="n">x</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">el</span> <span class="k">=&gt;</span> <span class="n">sigmoid</span><span class="o">(</span><span class="n">el</span><span class="o">)</span> <span class="o">*</span> <span class="o">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">sigmoid</span><span class="o">(</span><span class="n">el</span><span class="o">)))</span>
+    <span class="o">,</span> <span class="mf">0.5</span><span class="o">)))</span>
+
+  <span class="nc">DistBeliefMaster</span> <span class="o">!</span> <span class="nc">Start</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">JobDone</span> <span class="k">=&gt;</span> <span class="n">println</span><span class="o">(</span><span class="s">&quot;Yay finished!!!!&quot;</span><span class="o">)</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>In the above code we define the possible examples from the XOR truth table (with a bias term for each).  Then we create a data set of 50,000 randomly selected XOR examples.  Then we instantiate the <code>Master</code> actor from our <em>DistBelief</em> implementation.  The structure of the model replicas is defined by the <code>Seq(2,2,1)</code> parameter.  This means that our replicas will each have 3 layers with the first two layers having 2 <em>neural units</em> each and an output layer with one <em>neural unit</em> (note that all layers except for the output layer will have an addition bias <em>neural unit</em> as well).  Also, to emphasize data parallelism, we partition our data set into shards of size 2,000 which means that there will be 25 model replicas performing backpropagation in parallel.  We also need to specify the activation function as well as its derviative.  A common choice is the sigmoid function</p>
+<p>
+<div class="math">$$f(x)=\frac{1}{1+e^{-x}}$$</div>
+</p>
+<p>with a corresponding derivative function</p>
+<p>
+<div class="math">$$f'(x)=f(x)(1 - f(x))$$</div>
+</p>
+<p>We also use a learning rate of <span class="math">\(0.5\)</span>.</p>
+<p>In order to make sure that the XOR function is being learned correctly, we log each prediction/target pair for each forward pass of each model replica.  Furthermore, in order to make sure that each replica is reading and updating their corresponding parameter shard asynchronously, we log each parameter read and update.</p>
+<p>After we run the XOR actor, we can look at these logs.  Let's first look at a sample from the parameter update logs.</p>
+<div class="highlight"><pre><span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights updated by model replica 24</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-2] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">b</span><span class="x">] layer 1 weights updated by model replica 6</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights read by model replica 24</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights read by model replica 0</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-23] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] layer 0 weights read by model replica 22</span>
+</pre></div>
+
+
+<p>As you can see, reading and updating is very asynchronous.  For example, <code>replica 0</code> and <code>replica 22</code> read parameters that were previously updated by <code>replica 24</code>.</p>
+<p>Let's also take a look at a sample from the output/target logs.</p>
+<div class="highlight"><pre><span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-4] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">y</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 22, output: DenseVector(0.9846411083444292), target DenseVector(1.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-4] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">j</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 7, output: DenseVector(0.014412132053034238), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-9] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">c</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 0, output: DenseVector(0.9846381514105996), target DenseVector(1.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-2] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">i</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 6, output: DenseVector(0.9845703091212112), target DenseVector(1.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-13] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">j</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 7, output: DenseVector(0.01441744292688417), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-6] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">c</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 0, output: DenseVector(0.01441785533627319), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-15] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">j</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 7, output: DenseVector(0.01440768622587647), target DenseVector(0.0)</span>
+<span class="x">[INFO] [09/05/2015 19:15:44.626] [Main-akka.actor.default-dispatcher-15] [akka://Main/user/app/</span><span class="p">$</span><span class="nv">a</span><span class="x">/</span><span class="p">$</span><span class="nv">i</span><span class="x">/</span><span class="p">$</span><span class="nv">a</span><span class="x">] replica id 6, output: DenseVector(0.9845776319773324), target DenseVector(1.0)</span>
+</pre></div>
+
+
+<p>As you can see, the predictions are very close to the targets indicating that we have successfully learned the non-linear XOR function!  They change slightly for the same training examples because the parameter weights are constantly being updated in the backward pass.</p>
+<p>In summary, an Akka implementation of the <em>DistBelief</em> deep neural network training framework has been presented.  From the above example, it appears to successfully learn the XOR function, however there is still more features that could be added including</p>
+<ul>
+<li>The original paper specifies a deeper form of model parallelism than what was implemented in this blog post.  Here model replicas were distributed by layer whereas the <em>DistBelief</em> paper allows for model sharding within layers as well.  This would increase parallelism at the expense of much more complicated code (i.e. coordinator actors for each layer).</li>
+<li>Implementing <em>Sandblaster L-BFGS</em>, the other distributed optimization algorithm from the <em>DistBelief</em> paper (even though <em>Downpour SGD</em> was shown to perform better in the paper).</li>
+<li>Implementing regularization techniques such as early stopping, random dropout, etc.  </li>
+<li>Implementing more complicated neural network models such as recurrent neural networks and LSTMs.</li>
+</ul>
+<p>Thank you for reading!</p>
+<h2>References</h2>
+<ul>
+<li><a href="https://github.com/alexminnaar/AkkaDistBelief">AkkaDistBelief Github Repo</a></li>
+<li><a href="http://papers.nips.cc/paper/4687-large-scale-distributed-deep-networks.pdf">"Large Scale Distributed Deep Networks" by Dean et al.</a></li>
+<li><a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">The Akka Actor Frameword Website</a></li>
+<li><a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a> </li>
+</ul>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/solving-a-markov-decision-process-with-policy-iteration-and-value-iteration.html">Solving a Markov Decision Process with Policy Iteration and Value Iteration</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-07-05T00:00:00+02:00">
+          on&nbsp;Sun 05 July 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/reinforcement-learning.html">   Reinforcement Learning</a></p>
+</div><!-- /.post-info --><p>Most people think that all machine learning algorithms can be put into one of two categories - unsupervised or supervised learning (or perhaps semi-supervised learning).  However, reinforcement learning is a sub-field of machine learning that does not fit nicely into either of these boxes.  At a high level, reinforcement learning deals with an agent's behaviour in an environment where the agent can sequentially perform actions with associated rewards.  Naturally, the agent wants to perform actions in such a way as to maximize it's cumulative reward.  Reinforcement learning has clear applications in domains such as psychology, neuroscience, game theory, and many more which makes it an active area of research.  One way to formally define a reinforcement learning problem is the <em>Markov Decision Process</em> (MDP).</p>
+<h1>The Markov Decision Process</h1>
+<p>An MDP is defined by the 5-tuple <span class="math">\(\langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}, \gamma \rangle\)</span> where</p>
+<ul>
+<li><span class="math">\(\mathcal{S}\)</span> is a finite set of states.</li>
+<li><span class="math">\(\mathcal{A}\)</span> is a finite set of actions.</li>
+<li><span class="math">\(\mathcal{P}\)</span> is a state transition probability matrix where <span class="math">\(\mathcal{P}^a_{ss'}=P[S_{t+1}=s' | S_t=s, A_t=a]\)</span>.</li>
+<li><span class="math">\(\mathcal{R}\)</span> is a reward function where <span class="math">\(\mathcal{R}^a_s=E[R_{t+1} | S_t=s, A_t=a]\)</span>.</li>
+<li><span class="math">\(\gamma\)</span> is a discount factor where <span class="math">\(\gamma \in [0,1]\)</span>.</li>
+</ul>
+<p><span class="math">\(\mathcal{P}\)</span> obeys the Markov property which is where the name comes from.  Another important term to define is <span class="math">\(G_t\)</span> the cumulative reward from time-step <span class="math">\(t\)</span>.</p>
+<p>
+<div class="math">$$G_t=R_{t+1}+\gamma R_{t+2}+ ... = \sum^ \infty_{k=0} \gamma^k R_{t+k+1}$$</div>
+</p>
+<p>as you can see, future rewards are discounted by <span class="math">\(\gamma\)</span> meaning that immediate rewards are more valuable then those that come later.  Another important term is <span class="math">\(v(s)\)</span> the state-value function which defines the expected cumulative reward associated with each state in <span class="math">\(\mathcal{S}\)</span>.</p>
+<p>
+<div class="math">$$v(s)=E[G_t | S_t=s]$$</div>
+</p>
+<p>and if we subsitute the forumla for <span class="math">\(G_t\)</span> (ignoring actions for the moment)</p>
+<p>
+<div class="math">$$\begin{align}
+v(s) &amp;= E[R_{t+1}+\gamma R_{t+2}+ ... | S_t=s] \\
+&amp;= E[R_{t+1}+\gamma (R_{t+2}+ \gamma R_{t+3}...) | S_t=s] \\
+&amp;= E[R_{t+1}+\gamma G_{t+1} |S_t=s] \\
+&amp;= E[R_{t+1} +\gamma v(S_{t+1}) | S_t=s]
+\end{align}$$</div>
+</p>
+<p>The above expectation is with respect to the state transition matrix <span class="math">\(\mathcal{P}\)</span> which gives us</p>
+<p>
+<div class="math">$$v(s)=R_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}_{ss'} v(s')$$</div>
+</p>
+<p>This is known as the <em>Bellman equation</em>.  It decomposes the value function into the immediate reward <span class="math">\(R_s\)</span> and the discounted value of the possible successor states <span class="math">\(\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}_{ss'} v(s')\)</span>.  (Note: Some texts have the reward depend on the successor state (i.e. <span class="math">\(R^a_{ss'}\)</span>).  In this case, the reward would be a random variable governed by the transition probability matrix.  Here we are not taking the successor state into account with respect to the reward - meaning the reward is completely dependent upon the state you are in and therefore not a random variable).</p>
+<p>The last term that we must define is a policy <span class="math">\(\pi\)</span> which is a distribution over actions given states.</p>
+<p>
+<div class="math">$$\pi(a | s)=P[A_t=a | S_t =s]$$</div>
+</p>
+<p>Therefore, a policy determines which action to take at each state of the MDP. </p>
+<p>The transition matrix for a given policy <span class="math">\(\mathcal{P}^{\pi}_{ss'}\)</span> must take into account both the policy's action probability as well as the probability of that action actually being successful in the environment.</p>
+<p>
+<div class="math">$$\mathcal{P}^{\pi}_{ss'}=\sum_{a \in \mathcal{A}}\pi(a|s)\mathcal{P}^a_{ss'}$$</div>
+</p>
+<p>and similarly for the a given policy's reward</p>
+<p>
+<div class="math">$$\mathcal{R}^{\pi}_s=\sum_{a \in \mathcal{A}} \pi(a|s)\mathcal{R}^a_s$$</div>
+</p>
+<p>Therefore, the <em>Bellman equation</em> for a given policy <span class="math">\(\pi\)</span> is</p>
+<p>
+<div class="math">$$v_{\pi}(s)=R^{\pi}_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}^{\pi}_{ss'} v_{\pi}(s')$$</div>
+</p>
+<p>There are generally two problems associated with MDPs</p>
+<ul>
+<li><strong>Prediction: </strong> Given an MDP <span class="math">\(\langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}, \gamma \rangle\)</span> and a policy <span class="math">\(\pi\)</span>, compute the action-value function <span class="math">\(v_{\pi}(s)\)</span>.</li>
+<li><strong>Control:</strong> Given an MDP <span class="math">\(\langle \mathcal{S}, \mathcal{A}, \mathcal{P}, \mathcal{R}, \gamma \rangle\)</span>, compute the optimal policy <span class="math">\(\pi_*\)</span>.</li>
+</ul>
+<p>Policy iteration and value iteration are algorithms that can be used to solve these two MDP problems.</p>
+<h1>Policy Iteration</h1>
+<p>At first it seems like the prediction problem can be solved trivially by solving for <span class="math">\(v_{\pi}\)</span>.  If we put the <em>Bellman equation</em> in matrix form this amounts to</p>
+<p>
+<div class="math">$$
+\begin{align}
+\mathbf{v}_{\pi}&amp;=\mathbf{\mathcal{R}^{\pi}}+\gamma \mathbf{\mathcal{P}^{\pi}}\mathbf{v}_{\pi}\\
+&amp;= (I-\gamma \mathbf{\mathcal{P}^{\pi}})^{-1}\mathbf{\mathcal{R}^{\pi}}
+\end{align}$$</div>
+</p>
+<p>The problem with this approach is that it is <span class="math">\(O(n^3)\)</span> for an MDP with <span class="math">\(n\)</span> states which makes it practical for only small MDPs.  Fortunately, we can do better than <span class="math">\(O(n^3)\)</span> by using dynamic programming.  The <em>Bellman equation</em> is well-suited for dynamic programming because it allows us to reuse previous solutions.  Policy iteration is a dynamic programming algorithm that is used to solve both the prediction and control problems.  Policy iteration iterates between two steps - policy evaluation and policy improvement - until convergence at which point we are left with the optimal policy <span class="math">\(\pi_*\)</span> which can be evaluated to obtain the optimal value function <span class="math">\(v_{\pi*}\)</span>.</p>
+<h3>1. Policy Evaluation</h3>
+<p>The policy evaluation step is itself an iterative algorithm in which the value function <span class="math">\(v_{\pi}\)</span> for a given policy <span class="math">\(\pi\)</span> is computed.  <span class="math">\(v_{\pi}\)</span> is initialized randomly, then for each state <span class="math">\(s \in \mathcal{S}\)</span>, <span class="math">\(v_{\pi}(s)\)</span> is updated using the <em>Bellman equation</em></p>
+<p>
+<div class="math">$$v_{\pi}(s) \leftarrow R^{\pi}_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}^{\pi}_{ss'} v_{\pi}(s')$$</div>
+</p>
+<p>Eventually this converges to the correct <span class="math">\(v_{\pi}\)</span>.</p>
+<h3>2. Policy Improvement</h3>
+<p>The newly evaluated value function is then used to improve the current policy in yet another iterative step called policy improvement.  Again we iterate over each state <span class="math">\(s \in \mathcal{S}\)</span> and we greedily assign the policy action corresponding to the action that maximizes the <em>Bellman equation</em> for that state.</p>
+<p>
+<div class="math">$$\pi(s) \leftarrow \arg\max_{a \in \mathcal{A}} R^{a}_s+\gamma \sum_{s' \in \mathcal{S}} \mathcal{P}^{a}_{ss'} v_{\pi}(s')$$</div>
+</p>
+<p>Again, these greedy updates are performed until the policy converges. </p>
+<p>In summary, we begin with a random policy and iteratively perform policy evaluation and policy improvement until we converge to the optimal policy <span class="math">\(\pi_*\)</span>.  The following pseudocode illustrates policy iteration in its entirety.</p>
+<p><img alt="policy iteration" src="images/policy_iteration.png" title="=10x" /> </p>
+<p>Policy iteration is <span class="math">\(O(nm^2)\)</span> per iteration (it takes surprisingly few iterations to converge) which is a significant improvement upon the naive approach.</p>
+<h1>Value Iteration</h1>
+<p>Value iteration is similar to policy iteration with one slight change.  The policy evaluation step is the most computationally intense because it may take several passes through the state space before it converges.  What value iteration does is it truncates the policy evaluation step to only take a single pass through the state space to <em>approximate</em> the true value function.  Value iteration still has the same convergence guarantees as policy iteration but can often converge faster due to its truncated policy evaluation step.  The pseudocode for value iteration is presented below.</p>
+<p><img alt="value iteration" src="images/value_iteration.png" title="=20x" /> </p>
+<h1>Gridworld Code Demo</h1>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
+    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: 'center'," +
+        "    displayIndent: '0em'," +
+        "    showMathMenu: true," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
+        "    } " +
+        "}); ";
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
                         <h1 class="entry-title"><a href="/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></h1>
 <div class="post-info">
 	<ul>
@@ -83,7 +669,7 @@ Machine Learning at University College London. Natural language processing at Ve
         </li>
 
 	</ul>
-<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
 </div><!-- /.post-info --><p>In the <a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">previous post</a> the concept of word vectors was explained as was the derivation of the <em>skip-gram</em> model.  In this post we will explore the other <em>Word2Vec</em> model - the <em>continuous bag-of-words</em> (CBOW) model.  If you understand the <em>skip-gram</em> model then the <em>CBOW</em> model should be quite straight-forward because in many ways they are mirror images of each other.  For instance, if you look at the model diagram</p>
 <p><img alt="skip-gram model" src="images/cbow.png" /> </p>
 <p>it looks like the <em>skip-gram</em> model with the inputs and outputs reversed.  The input layer consists of the <em>one-hot</em> encoded input context words <span class="math">\(\{\mathbf{x_1},...,\mathbf{x_C}\}\)</span> for a word window of size <span class="math">\(C\)</span> and vocabulary of size <span class="math">\(V\)</span>.  The hidden layer is an N-dimensional vector <span class="math">\(\mathbf{h}\)</span>.  Finally, the output layer is output word <span class="math">\(\mathbf{y}\)</span> in the training example which is also <em>one-hot</em> encoded.  The <em>one-hot</em> encoded input vectors are connected to the hidden layer via a <span class="math">\(V \times N\)</span> weight matrix <span class="math">\(\mathbf{W}\)</span> and the hidden layer is connected to the output layer via a <span class="math">\(N \times V\)</span> wieght matrix <span class="math">\(\mathbf{W'}\)</span>.</p>
@@ -212,7 +798,7 @@ $$</div>
         </li>
 
 	</ul>
-<p>Category: <a href="/tag/nlp.html">   NLP</a><a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
+<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
 </div><!-- /.post-info --><p>In many natural language processing tasks, words are often represented by their <em>tf-idf</em> scores.  While these scores give us some idea of a word's relative importance in a document, they do not give us any insight into its semantic meaning.  <em>Word2Vec</em> is the name given to a class of neural network models that, given an unlabelled training corpus, produce a vector for each word in the corpus that encodes its semantic information.  These vectors are usefull for two main reasons.</p>
 <ol>
 <li>We can measure the semantic similarity between two words are by calculating the cosine similarity between their corresponding word vectors.  </li>
@@ -643,558 +1229,9 @@ E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
 <li><a href="http://spark.apache.org/docs/1.2.1/programming-guide.html">Spark programming guide</a>.</li>
 </ul>
                     </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics: Neural Networks, Backpropagation and Stochastic Gradient Descent</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-02-14T00:00:00+01:00">
-          on&nbsp;Sat 14 February 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/supervised-learning.html">   Supervised Learning</a></p>
-</div><!-- /.post-info --><p>In the last couple of years <em>Deep Learning</em> has received a great deal of press.  This press is not without warrant - <em>Deep Learning</em> has produced stat-of-the-art results in many computer vision and speech processing tasks.  However, I believe that the press has given people the impression that <em>Deep Learning</em> is some kind of imprenetrable, esoteric field that can only be understood by academics.  In this blog post I want to try to erase that impression and provide a practical overview of some of <em>Deep Learning's</em> basic concepts.</p>
-<p>At its core, <em>Deep Learning</em> is a class of of neural network models.  That is, a model with an input layer, an output layer, and an arbitrary number of hidden layers. These layers are made up of neurons or neural units.  They are called neurons because they share some similarities with the behaviour of the neurons present in the human brain (though this comparison has drawn a lot of criticism from neuroscientists).  For our purposes, we can think of a neuron as a nonlinear function of the weighted sum of its inputs.  Since the neuron is really the most basic part of any <em>Deep Learning</em> model it is a good place to start.</p>
-<h1>The Single Neuron Model</h1>
-<p>A neuron is a function that maps an input vector <span class="math">\(\{x_1,...,x_K\}\)</span> to a scalar output <span class="math">\(y\)</span> via a weight vector <span class="math">\(\{w_1,...,w_K\}\)</span> and a nonlinear function <span class="math">\(f\)</span>.</p>
-<p><img alt="general graphical model" src="images/neuron.png" title="=100x20" /> </p>
-<p>The function <span class="math">\(f\)</span> takes a weighted sum of the inputs and returns <span class="math">\(y\)</span>.</p>
-<p>
-<div class="math">$$y=f(\sum_{i=0}^Kw_ix_i)=f(\mathbf{w^Tx})$$</div>
-</p>
-<p>Often an additional element is added to the input vector that is always equal to <span class="math">\(1\)</span> with a corresponding additional weight element which acts as a bias.  The function <span class="math">\(f\)</span> is called the link function which provides the nonlinearity between the input and output.  A common choice for this link function is the <strong>logistic function</strong> which is defined as</p>
-<p>
-<div class="math">$$f(u)=\frac{1}{1+e^{u}}$$</div>
-</p>
-<p>With the appropriate substitutions the final formula for the single neuron model becomes</p>
-<p>
-<div class="math">$$y=\frac{1}{1+e^{\mathbf{w^Tx}}}$$</div>
-</p>
-<p>If you plot the logistic function,</p>
-<p><img alt="general graphical model" src="images/logistic.png" /> </p>
-<p>you can see that it is smooth and differentiable and bound between <span class="math">\(0\)</span> and <span class="math">\(1\)</span>.  We shall see that these are two important properties.  The derivative of the logistic function is simply</p>
-<p>
-<div class="math">$$\frac{d f(u)}{d u}=f(u)(1-f(u))=f(u)f(-u)$$</div>
-</p>
-<p>This derivative will be used when we learn the weight vector <span class="math">\(\bf{w}\)</span> via <strong>stochastic gradient descent</strong>.</p>
-<p>Like any optimization problem, our goal is to minimize an objective function.  Traditionally, the objective function measures the difference between the actual output <span class="math">\(t\)</span> and the predicted output <span class="math">\(f(\mathbf{w^Tx})\)</span>. In this case we will be using the squared loss function</p>
-<p>
-<div class="math">$$E=\frac{1}{2}(t - y)^2=\frac{1}{2}(t-f(\mathbf{w^Tx}))^2$$</div>
-</p>
-<p>We want to find the weights <span class="math">\(\mathbf{w}\)</span> such that the above objective is minimized.  We do this with stochastic gradient descent (SGD).  In SGD we iteratively update our weight parameters in the direction of the gradient of the loss function until we have reached a minimum.  Unlike traditional gradient descent, we do not use the entire dataset to compute the gradient at each iteration.  Instead, at each iteration we randomly select a single data point from our dataset and move in the direction of the gradient with respect to that data point.  Obviously this is only an approximation of the true gradient but it can be proven that we will eventually reach the minimum by following this <em>noisey</em> gradient.  There are several advantages to using stochastic gradient descent over traditional gradient descent.</p>
-<ol>
-<li>Gradient descent requires loading the entire dataset into main memory.  If your dataset is large this can be problematic.  Stochastic gradient descent only requires one data point at a time (or sometimes a minibatch of data points) which is much less memory intensive.</li>
-<li>Most datasets have redundancy in them.  Traditional gradient descent requires one full pass over the data until an update is made.  Due to redundancy, a meaningful update can often be made without iterating over the entire dataset as with stochastic gradient descent.</li>
-<li>As a consequence of the previous point, stochastic gradient descent can often converge faster than traditional gradient descent.  It is also guaranteed to find the global minimum if the loss function is convex.</li>
-</ol>
-<p>Our objective function <span class="math">\(E\)</span> is already defined in terms of a single data point so let's procede to compute its gradient with respect to an aribtrary element of our weight vector <span class="math">\(w_i\)</span>.</p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial E}{\partial w_i} &amp;= \frac{\partial E}{\partial y} \cdot \frac{\partial y}{\partial u} \cdot\frac{\partial u}{\partial w_i} \\
-&amp;= (y-t) \cdot y(1-y) \cdot x_i
-\end{align}$$</div>
-</p>
-<p>Now we are able to obtain the stochastic gradient descent update equation (in vector notation)</p>
-<p>
-<div class="math">$$\mathbf{w}^{new}=\mathbf{w}^{old}- \eta \cdot (y-t) \cdot y(1-y) \cdot \mathbf{x}$$</div>
-</p>
-<p>Where <span class="math">\(\eta&gt;0\)</span> is the step size.  As stated previously, <span class="math">\((\mathbf{x},y)\)</span> data points are sequentially fed into this update equation until the weights <span class="math">\(\mathbf{w}\)</span> converge to their optimal value.  This is how we use stochastic gradient descent to learn the weights for the single neuron model.</p>
-<p>What we just did is also known as <strong>logistic regression</strong> and if we had replaced our logistic function with a unit step function we would have made what is known as a <strong>perceptron</strong>!  Now let's extend this relatively simple model to something a bit more complex...</p>
-<h1>The Neural Network</h1>
-<p>A neural network consists of an input layer, output layer, and hidden layer. Our input layer consists of the input vector <span class="math">\(\mathbf{x}=\{x_1,...,x_K\}\)</span>.  The hidden layer  consists of a vector of <span class="math">\(N\)</span> neurons <span class="math">\(\mathbf{h}=\{h_1,...,h_N\}\)</span>.  Finally there is an output layer with one neuron for every element of the output vector <span class="math">\(\mathbf{y}=\{y_1,...,y_M\}\)</span>.  Every element in the input layer is connected to every neuron in the hidden layer with <span class="math">\(w_{ki}\)</span> indicating the weight associated with the connection between the <span class="math">\(k^{th}\)</span> input element and the <span class="math">\(i^{th}\)</span> hidden neuron.  The same connection structure is present between the hidden and output layers with  <span class="math">\(w'_{ij}\)</span> indicating the weight associated with the connection between the <span class="math">\(i^{th}\)</span> hidden neuron and the <span class="math">\(j^{th}\)</span> output neuron.  This network structure is better illustrated in the below diagram.</p>
-<p><img alt="general graphical model" src="images/neural_network.png" title="=250x" /> </p>
-<p>It is helpful to think of the weight <span class="math">\(w_{ki}\)</span> as the the <span class="math">\((k,i)^{th}\)</span> entry in a <span class="math">\(K \times N\)</span> weight matrix <span class="math">\(\mathbf{W}\)</span> and similarly weight <span class="math">\(w'_{ij}\)</span> as the <span class="math">\((i,j)^{th}\)</span> entry in a <span class="math">\(N \times M\)</span> weight matrix <span class="math">\(\mathbf{W'}\)</span>.  The output of each neuron in the hidden and output layer is computed in the exact same way as before.  It is simply the logistic function applied to the weighted sum of the neuron's inputs.  For example, the output of an arbitrary neuron in the hidden layer <span class="math">\(h_i\)</span> is</p>
-<p>
-<div class="math">$$h_i=f(u_i)=f(\sum^K_{k=1}w_{ki}x_k)$$</div>
-</p>
-<p>and similarly for the output of an arbitrary output neuron <span class="math">\(y_j\)</span> is</p>
-<p>
-<div class="math">$$y_j=f(u'_j)=f(\sum^N_{i=1}w'_{ij}h_i)$$</div>
-</p>
-<p>The objective function is also the same as before except now it is summed over all elements in the output layer.</p>
-<p>
-<div class="math">$$E=\frac{1}{2}\sum^M_{j=1}(y_j-t_j)^2$$</div>
-</p>
-<p>Unlike before, we need to construct update equations for <em>both</em> sets of weights - the input-to-hidden layer weights <span class="math">\(w_{ki}\)</span> and the hidden-to-output weights <span class="math">\(w'_{ij}\)</span>.  In order to do this we need to compute the gradient of our objective function <span class="math">\(E\)</span> with respect to <span class="math">\(w_{ki}\)</span> as well as the gradient with respect to <span class="math">\(w'_{ij}\)</span>.  We must start with the gradient with respect to <span class="math">\(w'_{ij}\)</span> (the hidden-to-output weights) and we shall see why later.  In order to compute <span class="math">\(\frac{\partial E}{\partial{w'_{ij}}}\)</span> we must recall our high-school calculus, specifically the chain rule.  From the chain rule, we must first take the derivative of <span class="math">\(E\)</span> with respect to <span class="math">\(y'_j\)</span>.  Then we must take the derivative of <span class="math">\(y_j\)</span> (i.e. the logistic function) with respect to <span class="math">\(w'_{ij}\)</span> which needs yet another application of the chain rule.  We first take the derivative of the logistic function with respect to its input <span class="math">\(u'_j\)</span>, then finally we can take the derivative of this input with respect to <span class="math">\(w'_{ij}\)</span> and we arrive at our desired value.  This process is clearly defined below.</p>
-<p>From the chain rule,</p>
-<p>
-<div class="math">$$\frac{\partial E}{\partial w'_{ij}}=\frac{\partial E}{\partial y_j} \cdot \frac{\partial y_j}{\partial u'_j} \cdot \frac{\partial u'_j}{\partial w'_{ij}}$$</div>
-</p>
-<p>The derivative of <span class="math">\(E\)</span> with respect to <span class="math">\(y_j\)</span> is simply,</p>
-<p>
-<div class="math">$$\frac{\partial E}{\partial y_j}=y_j-t_j$$</div>
-</p>
-<p>From the last section we saw that the derivative of the logistic function <span class="math">\(f\)</span> with respect to its input <span class="math">\(u\)</span> is <span class="math">\(f(u)(1-f(u))\)</span>.  If we apply this we get,</p>
-<p>
-<div class="math">$$\frac{\partial y_j}{\partial u'_j}=y_j(1-y_j)$$</div>
-</p>
-<p>where <span class="math">\(y_j=f(u'_j)\)</span>.  Next we compute the derivative of <span class="math">\(u'_j=\sum^N_{i=1}w'_{ij}h_i\)</span> with respect to a particular <span class="math">\(w'_{ij}\)</span> which is simply <span class="math">\(h_i\)</span>.  So, after making the appropriate subsitutions, we get</p>
-<p>
-<div class="math">$$\frac{\partial E}{\partial w'_{ij}}=(y_j-t_j) \cdot y_j(1-y_j) \cdot h_i$$</div>
-</p>
-<p>With this gradient we can construct the update equation for <span class="math">\(w'_{ij}\)</span></p>
-<p>
-<div class="math">$$w'^{new}_{ij}=w'^{old}_{ij} - \eta \cdot (y_j-t_j) \cdot y_j(1-y_j) \cdot h_i$$</div>
-</p>
-<p>Now let's turn our attention to the gradient of the objective function with respect to the input-to-hidden weights <span class="math">\(w_{ki}\)</span>.  As we shall see, this gradient has already been partially computed when we computed the previous gradient.</p>
-<p>Using the chain rule, the full gradient is</p>
-<p>
-<div class="math">$$\frac{\partial E}{\partial w_{ki}}=\sum^M_{j=1}(\frac{\partial E}{\partial y_j}\cdot \frac{\partial y_j}{\partial u'_j} \cdot \frac{\partial u'_j}{\partial h_i} )\cdot \frac{\partial h_i}{\partial u_i} \cdot \frac{\partial u_i}{\partial w_{ki}}$$</div>
-</p>
-<p>The sum is due to the fact that the hidden unit that <span class="math">\(w_{ki}\)</span> connects to is itself connected to every output unit, thus each of these gradients need to be taken into account as well.  We have already computed both <span class="math">\(\frac{\partial E}{\partial y_j}\)</span> and <span class="math">\(\frac{\partial y_j}{\partial u'_j}\)</span> which means that</p>
-<p>
-<div class="math">$$\frac{\partial E}{\partial y_j}\cdot \frac{\partial y_j}{\partial u'_j} = (y_j-t_j) \cdot y_j(1-y_j)$$</div>
-</p>
-<p>Now we need to compute the remaining derivatives <span class="math">\(\frac{\partial u'_j}{\partial h_i}\)</span>, <span class="math">\(\frac{\partial h_i}{\partial u_i}\)</span>, and <span class="math">\(\frac{\partial u_i}{\partial w_{ki}}\)</span>.  So let's do just that.</p>
-<p>
-<div class="math">$$\frac{\partial u'_j}{\partial h_i}=\frac{\partial \sum^N_{i=1}w'_{ij}h_i}{\partial h_i}=w'_{ij}$$</div>
-</p>
-<p>and, again using the derivative of the logistic function</p>
-<p>
-<div class="math">$$\frac{\partial h_i}{\partial u_i}=h_i(1-h_i)$$</div>
-</p>
-<p>and finally</p>
-<p>
-<div class="math">$$\frac{\partial u_i}{\partial w_{ki}}=\frac{\partial \sum^K_{k=1}w_{ki}x_k}{\partial w_{ki}}=x_k$$</div>
-</p>
-<p>After making the appropriate substitutions we arrive at the gradient</p>
-<p>
-<div class="math">$$\frac{\partial E}{\partial w_{ki}}=\sum^M_{j=1}[(y_j-t_j) \cdot y_j(1-y_j) \cdot w'_{ij}] \cdot h_i(1-h_i) \cdot x_k$$</div>
-</p>
-<p>And the update equation becomes</p>
-<p>
-<div class="math">$$w^{new}_{ki}=w^{old}_{ki} - \eta \cdot \sum^M_{j=1}[(y_j-t_j) \cdot y_j(1-y_j) \cdot w'_{ij}] \cdot h_i(1-h_i) \cdot x_k$$</div>
-</p>
-<p>This process is known as <strong>backpropagation</strong> because we begin with the final output error <span class="math">\(y_j-t_j\)</span> for the output neuron <span class="math">\(j\)</span> and this error gets propagated backwards throughout the network in order to update the weights.</p>
-<h1>Wrapping Everything Up</h1>
-<p>In this blog post we started with the simple single neuron model and we learned the model weights by computing the gradient of the objective function and using it in the stochastic gradient descent update equation.  Then we moved on to the slightly more complicated neural network model.  In this case we computed the required gradients using a procedure known as backpropagation and we again used these gradients in the SGD update equations.  True <em>Deep Learning</em> models either contain many more hidden layers or neurons in different configurations but they still adhere to the basic principles described here.  Hopefully this post has made <em>Deep Learning</em> seem like a more understandable and less daunting field of machine learning.</p>
-<h1>References</h1>
-<ul>
-<li><a href="https://www.coursera.org/course/neuralnets">Neural Networks for Machine Learning</a> Coursera course from Geoffrey Hinton.</li>
-<li><a href="http://deeplearning.stanford.edu/tutorial/">Deep Learning Tutorial</a> from Stanford.</li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-02-08T00:00:00+01:00">
-          on&nbsp;Sun 08 February 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
-</div><!-- /.post-info --><p>In this blog post I wanted to provide a demonstration of how to use the Cassandra database system in a practical web application.  We'll create a shoutbox app which you can think of as a very simple version of Twitter.</p>
-<h1>What is Cassandra?</h1>
-<p>Cassandra is a NoSQL distributed database system that is designed to deal with large amounts of data.  Its key advantages are the following.</p>
-<ul>
-<li><strong>Scalability:</strong>  Allows you to increase capacity by adding cheap commodity hardware without any downtime.</li>
-<li><strong>Fault Tolerant:</strong>  There is data replications and no single point of failure so if a node goes down the system remains operational.</li>
-<li><strong>Linear Performance:</strong> Throughput increases linearly with the number of nodes in the cluster.</li>
-<li><strong>Data Flexibility:</strong>  Supports many data formats and allows for a variable number of columns for each row.</li>
-</ul>
-<p>In terms of the <a href="http://en.wikipedia.org/wiki/CAP_theorem">CAP theorem</a>, Cassandra values availability and partition tolerance at the expence of consistency.  This means that Cassandra uses <em>eventual consistency</em> which means that eventually the system will reach a consistent state but at any given time it is possible that different nodes can hold different versions of the same data.  The actual architecture of Cassandra is beyond the scope of this blog post but it involves commit logs, memtables, and peer-to-peer gossip protocols.</p>
-<h1>How does Cassandra Work?</h1>
-<h2>Column Families</h2>
-<p>Column families are similar to RDMS tables.  Cassandra is a <em>column-oriented</em> database which means that columns are defined beforehand as well as the data format that each column can hold.  Unlike the RDMS system, rows in Cassandra can contain any number of columns in any order like in the following example.</p>
-<p><img alt="column family example" src="images/static_column_family.png" /></p>
-<p>Cassandra also offers <em>dynamic</em> column families which allows the user to create a row that contains precomputed results that can be quickly retrieved.  This is why Cassandra is described as a <em>key-value</em> database where column <em>values</em> can be quickly lookedup by their associated row <em>key</em>. </p>
-<h2>Keyspaces</h2>
-<p>Cassandra Keyspaces are similar to schemas in RDMS databases.  A keyspace groups and applications column families together.  Replication is done on a <em>per-keyspace</em> basis so data that resides in the same keyspace is replicated in the same way.  There is usually one keyspace per application.</p>
-<h2>Denormalization</h2>
-<p>One of the disadvantages of Cassandra compared to RDMS databases is that it is not well-suited for ad-hoc complex queries.  As a result you must know what queries you will need to perform beforehand and create your keyspaces accordingly.  Cassandra does not have the same foreign key relationships that RDMS databases have therefore you cannot <em>join</em> multiple column families.  As a consequence, the data that you want to retrieve in your queries should be contained in the same column family.  Therefore the queries that you plan on performing will define your data model.</p>
-<h1>Building a Shoutbox App</h1>
-<p>Say you have developed a Twitter-like app where users can post their thoughts (shouts) as well as follow other users.  Let's also assume that this app has exploded in popularity to the point where RDMS systems can no longer handle the huge amount of data so you turn to Cassandra.  Let's learn how an app such as this can interact with Cassandra.</p>
-<h2>Queries we will Use</h2>
-<p>As stated previously, Cassandra uses denormalization which means that we need to first decide what queries we want to perform, then optimize our data model according to these queries.  In our shoutbox app we would like to</p>
-<ul>
-<li>Show all users.</li>
-<li>Show who a user is following.</li>
-<li>Show who is following a user.</li>
-<li>Show the shouts of a particular user.</li>
-<li>Show all shouts.</li>
-</ul>
-<p>Consequently, we will create the following column families to accomodate these queries.</p>
-<ul>
-<li><strong>USERS</strong> which will contain <em>username</em> and <em>password</em> columns.</li>
-<li><strong>FOLLOWING</strong> which will contain <em>username</em> and <em>followed</em> columns.</li>
-<li><strong>FOLLOWERS</strong> which will contain <em>username</em> and <em>following</em> columns.</li>
-<li><strong>SHOUTS</strong> which will contain <em>shout_id</em>, <em>username</em>, and <em>body</em> columns.</li>
-<li><strong>USERSHOUTS</strong> which will contain <em>username</em>, <em>shout_id</em>, and <em>body</em> columns.</li>
-<li><strong>SHOUTWALL</strong> which will contain <em>username</em>, <em>shout_id</em>, <em>posted_by</em> and <em>body</em> columns.</li>
-</ul>
-<p>It may seem redundant to create all of these column families from the RDMS perspective but denomalization is necessary in Cassandra.</p>
-<h2>Creating the Column Families</h2>
-<p>We can actually create these column families using the CQL shell.  But first we have to create the keyspace for our app which we will call <code>shoutkeyspace</code>.</p>
-<div class="highlight"><pre>CREATE KEYSPACE shoutkeyspace WITH REPLICATION - {&#39;class&#39; : &#39;SimpleStrategy&#39;, &#39;replication_factor&#39; : 3};
-</pre></div>
-
-
-<p>In this example we will not be using multiple data centers so <code>SimpleStrategy</code> replication is used rather than  <code>NetworkTopology</code>.  We also use a <code>replication_factor</code> of 3 which indicates that our data will be replicated 3 times in our cluster.  We will use this keyspace to create our column families with the <code>USE shoutkeyspace;</code> command.</p>
-<p>Let's first create the <strong>USERS</strong> column family.</p>
-<div class="highlight"><pre>CREATE TABLE users(username text PRIMARY KEY, password text);
-</pre></div>
-
-
-<p>and now the <strong>FOLLOWING</strong> column family.</p>
-<div class="highlight"><pre>CREATE TABLE following(username text PRIMARY KEY, followed text);
-</pre></div>
-
-
-<p>and now the <strong>FOLLOWERS</strong> column family.</p>
-<div class="highlight"><pre>CREATE TABLE followers(username text PRIMARY KEY, following text);
-</pre></div>
-
-
-<p>and now the <strong>SHOUTS</strong> column family.</p>
-<div class="highlight"><pre>CREATE TABLE shouts(shout_id uuid PRIMARY KEY, username text, body text);
-</pre></div>
-
-
-<p>and now the <strong>USERSHOUTS</strong> column family.</p>
-<div class="highlight"><pre>CREATE TABLE usershouts(username text, shout_id timeuuid, body text, PRIMARY KEY(username, shout_id));
-</pre></div>
-
-
-<p>and finally the <strong>SHOUTWALL</strong> column family.</p>
-<div class="highlight"><pre>CREATE TABLE shoutwall(username text, shout_id timeuuid, posted_by text, body text, PRIMARY KEY(username, shout_id));
-</pre></div>
-
-
-<p>The columns associated with a <code>PRIMARY KEY</code> indicate the fields by which we will want to search our column families in our queries.</p>
-<h2>Inserting/Selecting Data</h2>
-<p>Inserting data into these column families will be done within the Node.js application but here is an example CQL statment to give you some idea.</p>
-<div class="highlight"><pre>INSERT INTO users(username, password) VALUES (&#39;user1&#39;, &#39;password1&#39;);
-</pre></div>
-
-
-<p>Obviously this example is purely instructive and in a real-world application more security would be used with respect to storing passwords.  You can also use batch commands to insert multiple values at once.  Selecting data can also be done with the normal SQL syntax, note however that <code>WHERE</code> clauses can only be applied to indexed fields (i.e. fields that are assigned a primary key).</p>
-<h1>Creating the Node.js Frontend</h1>
-<p>The first step in creating a Node.js frontend that interacts with Cassandra is adding the <a href="https://github.com/datastax/nodejs-driver">Node.js Cassandra client driver</a> to the <em>package.json</em> file.  This driver will enable us to connect with the Cassandra database that we have just created.  This can be done with the following code which should be added to the <em>app.js</em> file as well as any javascript file in which a Cassandra connection is made.</p>
-<div class="highlight"><pre><span class="kd">var</span> <span class="nx">client</span><span class="o">=</span><span class="k">new</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">Client</span><span class="p">({</span><span class="nx">contactPoint</span> <span class="o">:</span> <span class="p">[</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">]});</span>
-<span class="nx">client</span><span class="p">.</span><span class="nx">connect</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
-    <span class="nx">consolde</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;cassandra connected&#39;</span><span class="p">)</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>Note that in the above code we are connecting to a local instance of Cassandra.  This <code>client</code> variable is what we will be using to execute our Cassandra queries</p>
-<h2>Displaying Users</h2>
-<p>The most basic function that we want our app to perform is displaying all of the users.  To this end, we create a <em>users.js</em> file in the <em>routes</em> folder and add the following code.</p>
-<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllUsers</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
-  <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllUsers</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-    <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-        <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,{</span>
-            <span class="nx">users</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
-        <span class="p">});</span>
-    <span class="p">}</span>
-  <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>As you can see, the query to select all rows from the <code>users</code> column family is first saved as a string variable.  Then inside the <code>router.get()</code> function, the Cassandra <code>client</code> variable that we defined eariler executes this query and if it is successfull, the corresponding <code>users</code> view is rendered with the query result.  The <code>users</code> view is a <em>jade</em> file and for the purposes of this example it is very simple.</p>
-<div class="highlight"><pre>block content
-    h1 Users
-    ul
-        each user, i in users
-            li #{user.username}
-</pre></div>
-
-
-<p>The <code>each user, i in users</code> line loops through the query result from <em>users.js</em> and the resulting usernames are displayed in a list with <code>#{user.username}</code>.</p>
-<h2>Selecting Individual Users</h2>
-<p>Next we want to be able to select individual users from this list which will navigate us to a new page showing the selected user's information.  We create a new file in the <em>routes</em> folder called <em>user.js</em> and the code is very similar to what we have seen before.</p>
-<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">,{</span>
-                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
-                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
-                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span>
-            <span class="p">});</span>
-        <span class="p">}</span>
-    <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>You may have noticed the strange <code>WHERE username = ?</code> in the query string.  This is because we have to be told which username we are selecting.  This variable is passed into our query by the <code>[req.params.username]</code> parameter.  If the query is executed successfully, the specified user's <code>username</code>, <code>email</code>, and <code>full_name</code> fields are sent to the <em>user</em> view.  Again, the view is quite simple.  It simply displays the fields sent to it in <em>user.js</em>.</p>
-<div class="highlight"><pre>block content
-    h1 User Info
-    ul
-        li Name:
-            strong #{full_name}
-        li Username:
-            strong #{username}
-        li Email Address
-            strong #{email}
-</pre></div>
-
-
-<h2>Adding Users</h2>
-<p>Just like before we need to add a route and a view for adding a user.  Let's call the route <em>adduser.js</em>.  This will involve both a <em>GET</em> and a <em>POST</em> HTTP request - we need to get the data from the <em>adduser</em> form and then post it to Cassandra.</p>
-<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;adduser&#39;</span><span class="p">);</span>
-<span class="p">});</span>
-
-<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
-        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
-                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Added&#39;</span><span class="p">);</span>
-                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
-            <span class="p">}</span>
-        <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>So first we use use a GET request to render the <em>adduser</em> view.  This view contains the form where the required data is added (<em>username</em>, <em>password</em>, <em>email</em>, <em>full_name</em>).</p>
-<div class="highlight"><pre>block content
-    h1 Add User
-    form#formAddUser(name=&quot;adduser&quot;, method=&quot;post&quot;, action=&quot;/adduser&quot;)
-        div
-            input#inputUserName(type=&quot;text&quot;, placeholder=&quot;Enter Username&quot; name=&quot;username&quot;)
-        div
-            input#inputPassword(type=&quot;password&quot;, placeholder=&quot;Enter Password&quot; name=&quot;password&quot;)
-        div
-            input#inputEmail(type=&quot;text&quot;, placeholder=&quot;Enter Email&quot; name=&quot;email&quot;)
-        div
-            input#inputFullName(type=&quot;text&quot;, placeholder=&quot;Enter Full Name&quot; name=&quot;full_name&quot;)
-        div
-            button#btnSubmit(type=&quot;submit&quot;) Submit
-</pre></div>
-
-
-<p>Then we define our query to insert a new user into our Cassandra <em>users</em> column family. We then execute this query with the required fields and if successfull we redirect to the <em>users</em> view which should now contain our new user.</p>
-<h2>Updating Users</h2>
-<p>We also want the ability for a user to update their information. To edit a user's information, we want to present the same form as when the user was intially added with the same information already in the form's fields so that modification is easy.  Again, let's make an <em>edituser</em> route and view.  The <em>edituser.js</em> route looks like the following.</p>
-<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
-        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;edituser&#39;</span><span class="p">,</span> <span class="p">{</span>
-                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
-                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
-                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span><span class="p">,</span>
-                <span class="nx">password</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">password</span>
-            <span class="p">});</span>
-        <span class="p">}</span>
-    <span class="p">});</span>
-<span class="p">});</span>
-
-<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
-        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
-                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Updated&#39;</span><span class="p">);</span>
-                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">);</span>
-            <span class="p">}</span>
-        <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>First we execute a Cassandra query to get the information needed to populate the form.  When this is executed, the <em>edituser</em> view is rendered with form information from the query result appearing in the fields.  The rest is exactly the same as <em>adduser</em>.  Furthermore, the <em>edituser</em> view is almost exactly the same as the <em>adduser.js</em> view (with <code>action=/adduser</code> replaced with <code>action=/edituser</code> and the passed in values added) so I will not show it.</p>
-<h2>Deleting Users</h2>
-<p>We also want to be able to delete users.  To do this we add the following code to the <em>user.js</em> route.</p>
-<div class="highlight"><pre><span class="kd">var</span> <span class="nx">deleteUser</span> <span class="o">=</span> <span class="s2">&quot;DELETE FROM shoutkeyspace.users WHERE username = ?&quot;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="k">delete</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">deleteUser</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
-        <span class="p">}</span>
-    <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>First we create the delete query and execute it as usual.  However, we still need a way of creating this <em>DELETE</em> request when the <em>deleteuser</em> button is clicked.  We will do this with JQuery and AJAX.  We create a <em>main.js</em> file in the <em>/public/javascripts</em> folder which contains the following JQuery code.</p>
-<div class="highlight"><pre><span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
-    <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;click&#39;</span><span class="p">,</span> <span class="nx">deleteUser</span><span class="p">);</span>
-<span class="p">});</span>
-
-<span class="kd">function</span> <span class="nx">deleteUser</span><span class="p">(){</span>
-    <span class="nx">event</span><span class="p">.</span><span class="nx">preventDefault</span><span class="p">();</span>
-
-    <span class="kd">var</span> <span class="nx">confirmation</span> <span class="o">=</span> <span class="nx">confirm</span><span class="p">(</span><span class="s1">&#39;Are you sure that you want to delete this user?&#39;</span><span class="p">);</span>
-
-    <span class="k">if</span><span class="p">(</span><span class="nx">confirmation</span><span class="p">){</span>
-        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
-            <span class="nx">type</span><span class="o">:</span> <span class="s1">&#39;DELETE&#39;</span><span class="p">,</span>
-            <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">data</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">)</span>
-        <span class="p">}).</span><span class="nx">done</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">){</span>
-            <span class="nb">window</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
-        <span class="p">});</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="k">return</span> <span class="kc">false</span><span class="p">;</span>
-    <span class="p">}</span>
-<span class="p">}</span>
-</pre></div>
-
-
-<p>So when the <em>deleteuser</em> button is clicked, the <em>deleteUser()</em> function is called which uses AJAX to send the <em>DELETE</em> request to the correct URL.</p>
-<h2>Displaying Shouts</h2>
-<p>Now let's turn our attention to displaying shouts.  Again we must create a <em>shouts</em> route and view.  Our <em>shouts.js</em> route should look like the following.</p>
-<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.shouts&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllShouts</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
-                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
-            <span class="p">});</span>
-        <span class="p">}</span>
-    <span class="p">});</span>
-<span class="p">});</span>
-
-<span class="kd">var</span> <span class="nx">getUserShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.usershouts WHERE username = ?&#39;</span><span class="p">;</span>
-
-<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getUserShouts</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
-        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
-        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
-                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
-            <span class="p">});</span>
-        <span class="p">}</span>
-    <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>By now, this should be quite straight-forward.  The first <em>GET</em> request displays all shouts to the <em>shouts</em> view from the Cassandra query and the second <em>GET</em> request displays a specified user's shouts to the <em>shouts</em> view from another Cassandra query.</p>
-<h2>Adding Shouts</h2>
-<p>The final piece of the puzzle is enabling users to add shouts.  On the view side, this can be done with the following form.</p>
-<div class="highlight"><pre>form#formAddShout(name=&quot;addshout&quot;, method=&quot;post&quot;, action=&quot;/addshout&quot;)
-        div
-            select(name=&quot;username&quot;)
-                option(value=&quot;devuser1&quot;) devuser1
-                option(value=&quot;devuser2&quot;) devuser2
-                option(value=&quot;devuser3&quot;) devuser3
-                option(value=&quot;devuser4&quot;) devuser4
-        br
-        div
-            textarea(name=&quot;body&quot;, placeholder=&quot;Shout Something!&quot;, cols=&quot;50&quot;, rows=&quot;5&quot;)
-        br
-        div
-            button#btnSubmit(type=&quot;submit&quot;) Submit
-</pre></div>
-
-
-<p>This form contains a textarea in which the user can write their shout as well as the ability to post it as a specific user (ideally you would have a login system but this is beyond the scope of this app).  Next we create the route as the following.</p>
-<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
-    <span class="kd">var</span> <span class="nx">id1</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">uuid</span><span class="p">();</span>
-    <span class="kd">var</span> <span class="nx">id2</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">timeuuid</span><span class="p">();</span>
-
-    <span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="p">{</span>
-            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.shouts(shout_id, username, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
-            <span class="nx">params</span><span class="o">:</span><span class="p">[</span><span class="nx">id1</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
-        <span class="p">},</span>
-        <span class="p">{</span>
-            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.usershouts(username, shout_id, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
-            <span class="nx">params</span><span class="o">:</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">id2</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
-        <span class="p">}</span>
-    <span class="p">];</span>
-    <span class="nx">queryOptions</span> <span class="o">=</span> <span class="p">{};</span>
-    <span class="nx">client</span><span class="p">.</span><span class="nx">batch</span><span class="p">(</span><span class="nx">queries</span><span class="p">,</span> <span class="nx">queryOptions</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
-        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
-        <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/shouts&#39;</span><span class="p">);</span>
-    <span class="p">});</span>
-<span class="p">});</span>
-</pre></div>
-
-
-<p>Here we use a Cassandra batch query to insert the added shout into both the <code>shouts</code> and <code>usershouts</code> keyspaces.</p>
-<p>And that covers the basic functionality of our simple shoutbox app.  In summary, we have given a brief overview of Cassandra, added our keyspaces and column families for our app as well a built a Node.js frontend to connect with our Cassandra database.</p>
-<h2>References</h2>
-<ul>
-<li><a href="https://github.com/alexminnaar/shoutApp">Github repo</a> for the code used in this blog post.</li>
-<li><a href="http://www.datastax.com/">Datastax</a> where you can download the free Cassandra community edition as well as learn more about Cassandra.</li>
-<li><a href="http://nodejs.org/">nodejs.org</a> where you can download and learn more about Node.js. </li>
-</ul>
-                    </article>
  
 <div class="paginator">
-    <div class="navButton">Page 1 / 4</div>
+    <div class="navButton">Page 1 / 5</div>
         <div class="navButton"><a href="/author/alex-minnaar2.html" >Next</a></div>
 </div>
                 </div>
