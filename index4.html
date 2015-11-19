@@ -74,422 +74,6 @@ Machine Learning at University College London. Research Engineer at Nitro.
             <aside id="featured">
                 <div class="body">
                     <article>
-                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-6.html">Facebook Recruiting III Keyword Extraction - Part 6</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2013-10-27T00:00:00+02:00">
-          on&nbsp;Sun 27 October 2013
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><h2>Test Examples</h2>
-<p>In this post we will be testing the association rule algorithm on a few posts from the training set.  Usually it is bad practice to test on your training set but this is just for illustrative purposes (since the training set is so large and we are only testing on a few examples, it should not make a significant difference anyway).</p>
-<h3>Example 1:</h3>
-<p><strong>Title:</strong> php script to echo a post</p>
-<p><strong>Body:</strong></p>
-<div class="highlight"><pre><span class="nt">&lt;p&gt;</span>Could someone help with a simple PHP script to echo the whole message received with an HTTPPOST.<span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>I am sending a string from an android app using HTTPPOST and would like to receive as a response the message received by the POST at the server.<span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>The script that I am using will only echo name value pairs <span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;pre&gt;&lt;code&gt;</span>echo $_POST(&#39;data&#39;) <span class="nt">&lt;/code&gt;&lt;/pre&gt;</span> <span class="nt">&lt;p&gt;</span>works when I post form data, but have not figured out how to echo a string. <span class="nt">&lt;/p&gt;</span> <span class="nt">&lt;p&gt;</span>Thanks<span class="nt">&lt;/p&gt;</span>
-</pre></div>
-
-
-<p><strong>Tags:</strong> php android</p>
-<p>The most likely association rules for the post title are</p>
-<table>
-<thead>
-<tr>
-<th>Title Word</th>
-<th>Tag Word</th>
-<th>Support</th>
-<th>Confidence</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>php</td>
-<td>php</td>
-<td>158454</td>
-<td>0.9415</td>
-</tr>
-<tr>
-<td>echo</td>
-<td>php</td>
-<td>2237</td>
-<td>0.6268</td>
-</tr>
-<tr>
-<td>echo</td>
-<td>echo</td>
-<td>820</td>
-<td>0.2298</td>
-</tr>
-<tr>
-<td>post</td>
-<td>php</td>
-<td>7042</td>
-<td>0.1817</td>
-</tr>
-<tr>
-<td>script</td>
-<td>php</td>
-<td>8652</td>
-<td>0.1631</td>
-</tr>
-<tr>
-<td>post</td>
-<td>post</td>
-<td>6124</td>
-<td>0.1579</td>
-</tr>
-<tr>
-<td>script</td>
-<td>javascript</td>
-<td>6657</td>
-<td>0.1255</td>
-</tr>
-<tr>
-<td>script</td>
-<td>bash</td>
-<td>6642</td>
-<td>0.1233</td>
-</tr>
-</tbody>
-</table>
-<p>As you can see, the most likely association rule is <span class="math">\(php \rightarrow php\)</span>.  This is good since "php" is indeed a tag for this post.  The other tag for this post is "android" however there are no association rules listed that correspond to this tag.  This is not necessarily bad news because the title "php script to echo a post" does not even suggest that this post relates to "android" at all.  Perhaps the android-related content is in the post body...</p>
-<p>The most likely association rules for the post body are</p>
-<table>
-<thead>
-<tr>
-<th>Title Word</th>
-<th>Tag Word</th>
-<th>Support</th>
-<th>Confidence</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>android</td>
-<td>android</td>
-<td>200854</td>
-<td>0.8938</td>
-</tr>
-<tr>
-<td>php</td>
-<td>php</td>
-<td>290432</td>
-<td>0.7563</td>
-</tr>
-<tr>
-<td>echo</td>
-<td>php</td>
-<td>13577</td>
-<td>0.5538</td>
-</tr>
-<tr>
-<td>httppost</td>
-<td>android</td>
-<td>588</td>
-<td>0.4273</td>
-</tr>
-<tr>
-<td>httppost</td>
-<td>asp.net-mvc</td>
-<td>272</td>
-<td>0.1977</td>
-</tr>
-<tr>
-<td>app</td>
-<td>android</td>
-<td>128830</td>
-<td>0.1933</td>
-</tr>
-<tr>
-<td>script</td>
-<td>php</td>
-<td>73170</td>
-<td>0.1926</td>
-</tr>
-<tr>
-<td>httppost</td>
-<td>java</td>
-<td>217</td>
-<td>0.1577</td>
-</tr>
-</tbody>
-</table>
-<p>As suspected, the android-related content was in the post body as shown by the most likely association rule <span class="math">\(android \rightarrow android\)</span>.  So the two most likely association rules correspond to the correct tags of "php" and "android" with probabilities 0.9415 and 0.8938 respectively.  The most likely incorrect tag is "echo" with probability 0.2298.</p>
-<h3>Example 2:</h3>
-<p><strong>Title:</strong> Can output of a method be used to autowire another bean?</p>
-<p><strong>Body:</strong></p>
-<div class="highlight"><pre><span class="nt">&lt;p&gt;</span>I have a following class <span class="nt">&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</span>public class Customer {private String firstName;private String lastName;public void setFirstName(String fName) {this.firstName = fName;}public void setLastName(String lName) {this.lastName = lName;}};<span class="nt">&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;</span>I&#39;ve another class that does the following.<span class="nt">&lt;/p&gt;&lt;pre&gt;&lt;code&gt;</span>public class NameGenerator {public String generateName() {return &quot;Zee Zee&quot;;}};<span class="nt">&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;</span>Is it possible to set the name of customer (inject name into customer) without having passing NameGenerator bean. Rather, I&#39;m expecting to inject the output of <span class="nt">&lt;code&gt;</span>generateName()<span class="nt">&lt;/code&gt;</span> method?<span class="nt">&lt;/p&gt;&lt;p&gt;</span>This question is for sake of understanding if it can or cannot be done and does not necessarily delve into best practices.<span class="nt">&lt;/p&gt;</span>
-</pre></div>
-
-
-<p><strong>Tags:</strong> java spring dependency-injection</p>
-<p>The most likely association rules for the post title are</p>
-<table>
-<thead>
-<tr>
-<th>Title Word</th>
-<th>Tag Word</th>
-<th>Support</th>
-<th>Confidence</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>autowire</td>
-<td>spring</td>
-<td>157</td>
-<td>0.9235</td>
-</tr>
-<tr>
-<td>autowire</td>
-<td>java</td>
-<td>102</td>
-<td>0.6000</td>
-</tr>
-<tr>
-<td>bean</td>
-<td>java</td>
-<td>2236</td>
-<td>0.4529</td>
-</tr>
-<tr>
-<td>autowire</td>
-<td>autowired</td>
-<td>63</td>
-<td>0.3706</td>
-</tr>
-<tr>
-<td>bean</td>
-<td>spring</td>
-<td>1532</td>
-<td>0.3103</td>
-</tr>
-<tr>
-<td>bean</td>
-<td>jsf</td>
-<td>1157</td>
-<td>0.2343</td>
-</tr>
-<tr>
-<td>autowire</td>
-<td>spring-mvc</td>
-<td>31</td>
-<td>0.1824</td>
-</tr>
-<tr>
-<td>autowire</td>
-<td>autowire</td>
-<td>30</td>
-<td>0.1765</td>
-</tr>
-</tbody>
-</table>
-<p>The most likely association rules for the post body are</p>
-<table>
-<thead>
-<tr>
-<th>Title Word</th>
-<th>Tag Word</th>
-<th>Support</th>
-<th>Confidence</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>bean</td>
-<td>java</td>
-<td>12812</td>
-<td>0.4382</td>
-</tr>
-<tr>
-<td>bean</td>
-<td>spring</td>
-<td>8480</td>
-<td>0.2900</td>
-</tr>
-<tr>
-<td>bean</td>
-<td>jsf</td>
-<td>7165</td>
-<td>0.2451</td>
-</tr>
-<tr>
-<td>class</td>
-<td>java</td>
-<td>137473</td>
-<td>0.1859</td>
-</tr>
-<tr>
-<td>method</td>
-<td>c#</td>
-<td>109780</td>
-<td>0.1682</td>
-</tr>
-<tr>
-<td>class</td>
-<td>c#</td>
-<td>116603</td>
-<td>0.1576</td>
-</tr>
-<tr>
-<td>inject</td>
-<td>java</td>
-<td>1788</td>
-<td>0.1522</td>
-</tr>
-<tr>
-<td>inject</td>
-<td>dependency-injection</td>
-<td>1760</td>
-<td>0.1498</td>
-</tr>
-</tbody>
-</table>
-<p>In this example, the association rule algorithm does not work as well.  The top two most likely association rules do indeed correspond to the correct tags of "spring" and "java", however the third correct tag "dependency-injection" has a likelihood of only 0.1498.  Therefore, several incorrect tags such as "autowired", "jsf", "spring-mvc", "autowire",  and "c#" are more likely than the correct tag of "dependency-injection".</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-5.html">Facebook Recruiting III Keyword Extraction - Part 5</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2013-10-05T00:00:00+02:00">
-          on&nbsp;Sat 05 October 2013
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
-</div><!-- /.post-info --><h2>Implementing the association rule algorithm</h2>
-<p>As stated earlier, words in post titles and words in post bodies are fundamentally different with respect to their influence on the tags that are assigned to that post.  So for this reason, two sets of association rules will be generated - title-tag association rules and body-tag association rules.</p>
-<p>Since the dataset is so large, steps must be taken to make sure that we don't run out of RAM. We can do this by importing the dataset line-by-line such that only one line of the dataset is held in main memory at any one time before it is exported to another csv file.  The association rule algorithm can be implemented in the following steps.</p>
-<ol>
-<li><strong>Find All Combinations:</strong>  The first step is to find all combinations of words (title or body words depending on which set of rules you are finding) and tags that appear in the same posts.  The list of all combinations will be huge! Mine came to about 13GB which would definitely generate a memory error if you were to hold it all in main memory, so each combination must be exported sequentially into another csv file.</li>
-<li><strong>Count All Combinations:</strong>  Now you must import that huge list of all combinations and count the number of times each distinct combination appears in the list.  The counts must be held in main memory, but since you are only holding the counts of each distinct combination, it will be much smaller than 13GB (mine came to about 1.5GB).  Now you have <span class="math">\(|Co(A,B)|\)</span> for all words <span class="math">\(A\)</span> and tags <span class="math">\(B\)</span>!</li>
-<li><strong>Count Overall Word Occurrences:</strong> Next, in order to calculate the required probabilities, we need to count the number of occurrences of each word in the set of post titles (or bodies).</li>
-<li><strong>Calculate Probabilities and Save as Dictionary:</strong>  Now, since we have the word counts and the co-occurrence counts, we can calculate the required probability <span class="math">\(P(B|A)\)</span> for each combination.</li>
-</ol>
-<h3>Code snippets</h3>
-<p>Here are a few snippets of python code to give us a better understanding of how the above steps can be implemented.  The following snippet finds all combinations of words and tags</p>
-<div class="highlight"><pre><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;input_file.csv&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">r</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="s">r&quot;output_file.csv&quot;</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-     <span class="n">rdr</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rdr</span><span class="p">:</span>
-          <span class="n">a</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-          <span class="n">b</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-          <span class="k">for</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span> <span class="n">b</span><span class="o">.</span><span class="n">split</span><span class="p">()):</span>
-               <span class="n">w</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;{},{}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
-</pre></div>
-
-
-<p>where a is a string containing the title (or body) of a post and b is a string containing the list of tags for that post.  Also, the product() function is part of the python itertools package which would need to be imported.
-This next snippet shows how the combinations are then counted.</p>
-<div class="highlight"><pre><span class="n">counter</span><span class="o">=</span><span class="p">{}</span>
-<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;output_file.csv&quot;</span><span class="p">,</span><span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_name</span><span class="p">:</span>
-     <span class="n">reader</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
-     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
-          <span class="n">pair</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-          <span class="k">if</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">counter</span><span class="p">:</span>
-               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">+=</span><span class="mi">1</span>
-          <span class="k">else</span><span class="p">:</span>
-               <span class="n">counter</span><span class="p">[</span><span class="n">pair</span><span class="p">]</span><span class="o">=</span><span class="mi">1</span>
-</pre></div>
-
-
-<p>where counter is a dictionary whose key is a word/tag pair and its value is the count of the number of times they co-occur.  All of the other steps in the algorithm can be implemented by modifying these two code snippets in some way.</p>
-<h3>Some results</h3>
-<p>Here are some examples of probability distributions <span class="math">\(P(B|A)\)</span> for different words <span class="math">\(A\)</span>.</p>
-<p>The first of the following plots shows the top 10 most likely tags when the word "C++" appears in a post title and the second plot shows the top 10 most likely tags when "C++" appears in a post body.</p>
-<p><img alt="alt text" src="images/cplusplus3.png" title="C++ title" /> 
-<img alt="alt text" src="images/cplusplus_body1.png" title="C++ body" /></p>
-<p>As one might expect, the most likely tag (by a large margin) is "c++".  It is also interesting to see that the likelihoods are significantly larger for when "C++" appears in the title.  This makes sense intuitively because titles are short and succinct and therefore each title word should generally be more descriptive of the overall post than a word in the post body.</p>
-<p>The next set of plot is for the word "sql".</p>
-<p><img alt="alt text" src="images/sql.png" title="SQL title" /> 
-<img alt="alt text" src="images/sql_body.png" title="SQL body" /></p>
-<p>What is interesting about these tag likelihoods is that there is not a clear winner.  The tags "sql" and "sql-server" are both quite likely.</p>
-<p>The next set of plot is for the more obscure word "geodesic".</p>
-<p><img alt="alt text" src="images/geodesic3.png" title="Geodesic title" /> 
-<img alt="alt text" src="images/geodesic_body.png" title="Geodesic body" /></p>
-<p>There are several interesting differences with these plots.  The first is that the actual post word "geodesic" is not in the top ten most likely tags (it is probably not even in the set of possible tags).  Another difference is that the tag likelihoods are actually larger when "geodesic" appears in the post body.  This is probably because "geodesic" is a more obscure word than "C++" and "sql".</p>
-<p>The next step is to use these association rules to make predictions.  Stay tuned...</p>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
                         <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-4.html">Facebook Recruiting III Keyword Extraction - Part 4</a></h1>
 <div class="post-info">
 	<ul>
@@ -706,11 +290,630 @@ In order to reduce the size of this large dataset we have to make some simplifyi
 </table>
 <p>As you can see removing the code and link text has cut the size of the post bodies in half!  This is will be a huge benefit for future computation.</p>
                     </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/facebook-recruiting-iii-keyword-extraction-part-1.html">Facebook Recruiting III Keyword Extraction - Part 1</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2013-09-14T00:00:00+02:00">
+          on&nbsp;Sat 14 September 2013
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/kaggle-competitions.html">   Kaggle-Competitions</a><a href="/tag/nlp.html">   NLP</a></p>
+</div><!-- /.post-info --><p>This is my first post about my foray into the Facebook recruiting competition from Kaggle.  The basic idea of this competition is that competitors are given a training set of posts from stackoverflow and their corresponding tags.  From this training set competitors must build some sort of model to infer tags from posts (in the form of post titles and post bodies).  Then this model is applied to a test set and its accuracy is measured based on its tag predictions. Full details can be found <a href="http://www.kaggle.com/c/facebook-recruiting-iii-keyword-extraction">here</a>.</p>
+<p>After parsing and counting the individual tags.  The top ten most frequently occurring tags are the following.</p>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Frequency</th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>c#</td>
+<td>463526</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>java</td>
+<td>392451</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>php</td>
+<td>463526</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>javascript</td>
+<td>365623</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>android</td>
+<td>320622</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>jquery</td>
+<td>305614</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>c++</td>
+<td>199280</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>python</td>
+<td>199280</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>iphone</td>
+<td>183573</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>asp.net</td>
+<td>177334</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The most popular tags tend to be programming languages which is what one should expect.</p>
+<h2>Something Strange!</h2>
+<p>The list of the most popular tags is not strange at all.  What is strange is the fact that in the leaderboard for this competition there is a benchmark for the submission of all predictions set to 'javascript'.  This is strange because 'javascript' is not even the most popular tag.  It's not even the second most popular tag.  It is the fourth most popular tag.  So this begs the question why make the benchmark all predictions 'javascript' instead of all predictions 'c#' ?  After all,  'c#' is the most popular tag.  I don't know why...</p>
+<h2>So Let's Test it!</h2>
+<p>Why don't we use our first submission as setting all predictions to 'c#'.  If the tag distribution of the test set is the same as the training set (we must assume that it is), then this submission should do better than the 'javascript' submission.  The 'javascript' submission attained a score of 0.03148.  The result for the all 'c#' submission is... 0.03857</p>
+<p>Yay! This at least confirms our suspicion that the most popular tags in the training set are also the most popular terms in the test set.  However, this is still a relatively low score.  A more rigorous solution needs to be implemented in order to achieve a higher score.  So stay tuned for part 2</p>
+                    </article>
  
 <div class="paginator">
             <div class="navButton"><a href="/index3.html">Prev</a></div>
-    <div class="navButton">Page 4 / 5</div>
-        <div class="navButton"><a href="/index5.html" >Next</a></div>
+    <div class="navButton">Page 4 / 4</div>
 </div>
                 </div>
             </aside><!-- /#featured -->

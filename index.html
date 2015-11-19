@@ -524,266 +524,6 @@ Machine Learning at University College London. Research Engineer at Nitro.
             <aside id="featured">
                 <div class="body">
                     <article>
-                        <h1 class="entry-title"><a href="/word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-05-18T00:00:00+02:00">
-          on&nbsp;Mon 18 May 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
-</div><!-- /.post-info --><p>In the <a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">previous post</a> the concept of word vectors was explained as was the derivation of the <em>skip-gram</em> model.  In this post we will explore the other <em>Word2Vec</em> model - the <em>continuous bag-of-words</em> (CBOW) model.  If you understand the <em>skip-gram</em> model then the <em>CBOW</em> model should be quite straight-forward because in many ways they are mirror images of each other.  For instance, if you look at the model diagram</p>
-<p><img alt="skip-gram model" src="images/cbow.png" /> </p>
-<p>it looks like the <em>skip-gram</em> model with the inputs and outputs reversed.  The input layer consists of the <em>one-hot</em> encoded input context words <span class="math">\(\{\mathbf{x_1},...,\mathbf{x_C}\}\)</span> for a word window of size <span class="math">\(C\)</span> and vocabulary of size <span class="math">\(V\)</span>.  The hidden layer is an N-dimensional vector <span class="math">\(\mathbf{h}\)</span>.  Finally, the output layer is output word <span class="math">\(\mathbf{y}\)</span> in the training example which is also <em>one-hot</em> encoded.  The <em>one-hot</em> encoded input vectors are connected to the hidden layer via a <span class="math">\(V \times N\)</span> weight matrix <span class="math">\(\mathbf{W}\)</span> and the hidden layer is connected to the output layer via a <span class="math">\(N \times V\)</span> wieght matrix <span class="math">\(\mathbf{W'}\)</span>.</p>
-<h1>Forward Propagation</h1>
-<p>We must first understand how the output is computed from the input (i.e. forward propagation).  The following assumes that we know the input and output weight matrices (I will explain how these are actually learned in the next section).  The first step is to evaluate the output of the hidden layer <span class="math">\(\mathbf{h}\)</span>.  This is computed by</p>
-<p>
-<div class="math">$$\mathbf{h}=\frac{1}{C} \mathbf{W} \cdot (\sum^C_{i=1} \mathbf{x_i})$$</div>
-</p>
-<p>which is the average of the input vectors weighted by the matrix <span class="math">\(\mathbf{W}\)</span>.  It is worth noting that this hidden layer output computation is one of the only differences between the <em>continuous bag-of-words</em> model and the <em>skip-gram</em> model (in terms of them being mirror images of course).  Next we compute the inputs to each node in the output layer</p>
-<p>
-<div class="math">$$u_j= \mathbf{v'_{w_j}}^T \cdot \mathbf{h}$$</div>
-</p>
-<p>where <span class="math">\(\mathbf{v'_{w_j}}\)</span> is the <span class="math">\(j^{th}\)</span> column of the output matrix <span class="math">\(\mathbf{W'}\)</span>.  And finally we compute the output of the output layer.  The output <span class="math">\(y_j\)</span> is obtained by passing the input <span class="math">\(u_j\)</span> throught the soft-max function.</p>
-<p>
-<div class="math">$$y_j=p(w_{y_j} | w_1,...,w_C)=\frac{\exp(u_j)}{\sum^V_{j'=1} \exp(u_j')}$$</div>
-</p>
-<p>Now that we know how forward propagation works we can learn the weight matrices <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>.  </p>
-<h1>Learning the Weight Matrices with Backpropagation</h1>
-<p>In the process of learning the wieght matrices <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>, we begin with randomly initialized values.  We then sequentially feed training examples into our model and observe the error which is some function of the difference between the expected output and the actual output.  We then compute the gradient of this error with respect to the elements of both weight matrices and correct them in the direction of this gradient.  This general optimization procedure is known as stochastic gradient descent (or sgd) but the method by which the gradients are derived is known as backpropagation.  </p>
-<p>The first step is to define the loss function.  The objective is to maximize the conditional probability of the output word given the input context, therefore our loss function will be</p>
-<p>
-<div class="math">$$\begin{align}
-E &amp;= -\log p(w_O | w_I) \\
-&amp;= -u_{j*} - \log \sum_{j'=1}^V \exp(u_{j'})  \\
-&amp;=- \mathbf{v_{w_O}}^T \cdot \mathbf{h} - \log \sum_{j'=1}^V \exp(\mathbf{v_{w_{j'}}}^T \cdot \mathbf{h}) 
-\end{align}$$</div>
-</p>
-<p>Where <span class="math">\(j^*\)</span> is the index of the the actual output word.  The next step is to derive the update equation for the hidden-output layer weights <span class="math">\(\mathbf{W'}\)</span>, then derive the weights for the input-hidden layer weights <span class="math">\(\mathbf{W}\)</span></p>
-<h2>Updating the hidden-output layer weights</h2>
-<p>The first step is to compute the derivative of the loss function <span class="math">\(E\)</span> with respect to the input to the <span class="math">\(j^{th}\)</span> node in the output layer <span class="math">\(u_j\)</span>.</p>
-<p>
-<div class="math">$$\frac{\partial{E}}{\partial{u_j}}=y_j - t_j$$</div>
-</p>
-<p>where <span class="math">\(t_j=1\)</span> if <span class="math">\(j=j^*\)</span> otherwise <span class="math">\(t_j=0\)</span>.  This is simply the prediction error of node <span class="math">\(j\)</span> in the output layer.  Next we take the derivative of <span class="math">\(E\)</span> with respect to the output weight <span class="math">\(w'_{ij}\)</span> using the chain rule.</p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial{E}}{\partial{w'_{ij}}} &amp;= \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{w'_{ij}}} \\
-&amp;= (y_j - t_j) \cdot h_i
-\end{align}$$</div>
-</p>
-<p>Now that we have the gradient with respect to an arbitrary output weight <span class="math">\(w'_{ij}\)</span>, we can define the stochastic gradient descent equation.</p>
-<p>
-<div class="math">$$w_{ij}^{'(new)}=w_{ij}^{'(old)} - \eta \cdot (y_j - t_j) \cdot h_i$$</div>
-</p>
-<p>or
-<div class="math">$$\mathbf{v'_{w_j}}^{(new)}=\mathbf{v'_{w_j}}^{(old)} - \eta \cdot (y_j - t_j) \cdot \mathbf{h}$$</div>
-</p>
-<p>where <span class="math">\(\eta&gt;0\)</span> is the learning rate. </p>
-<h2>Updating the input-hidden layer weights</h2>
-<p>Now let's try to derive a similar update equation for the input weights <span class="math">\(w_{ij}\)</span>.  The first step is to compute the derivative of <span class="math">\(E\)</span> with respect to an arbitrary hidden node <span class="math">\(h_i\)</span> (again using the chain rule).</p>
-<p>
-<div class="math">$$
-\begin{align}
-\frac{\partial{E}}{\partial{h_i}} &amp;= \sum^V_{j=1} \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{h_i}} \\
-&amp;= \sum^V_{j=1} (y_j - t_j) \cdot w'_{ij}
-\end{align}
-$$</div>
-</p>
-<p>where the sum is do to the fact that the hidden layer node <span class="math">\(h_i\)</span> is connected to each node of the output layer and therefore each prediction error must be incorporated.  The next step is to compute the derivative of <span class="math">\(E\)</span> with respect to an arbitrary input weight <span class="math">\(w_{ki}\)</span>.</p>
-<p>
-<div class="math">$$
-\begin{align}
-\frac{\partial{E}}{\partial{w_{ki}}} &amp;= \frac{\partial{E}}{\partial{h_i}} \cdot \frac{\partial{h_i}}{\partial{w_{ki}}}\\
- &amp;= \sum^V_{j=1} (y_j - t_j) \cdot w'_{ij} \cdot \frac{1}{C} \cdot x_k \\
- &amp; = \frac{1}{C}(\mathbf{x} \cdot EH)
-\end{align}
-$$</div>
-</p>
-<p>Where <span class="math">\(EH\)</span> is an N-dimensional vector of elements <span class="math">\(\sum^V_{j=1} (y_j - t_j) \cdot w'_{ij}\)</span> from <span class="math">\(i=1,...,N\)</span>.  However, since the inputs <span class="math">\(\mathbf{x}\)</span> are <em>one-hot</em> encoded, only one row of the <span class="math">\(N \times V\)</span> matrix <span class="math">\(\frac{1}{C}(\mathbf{x} \cdot EH)\)</span> will be nonzero.  Thus the final stochastic gradient descent equation for the input weights is</p>
-<p>
-<div class="math">$$\mathbf{v'_{w_{I,c}}}^{(new)}=\mathbf{v'_{w_{I,c}}}^{(old)} - \eta \cdot \frac{1}{C} \cdot EH$$</div>
-</p>
-<p>where <span class="math">\(w_{I,c}\)</span> is the <span class="math">\(c^{th}\)</span> word in the input context.</p>
-<h2>References</h2>
-<ul>
-<li><a href="http://alexminnaar.com/word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a></li>
-<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
-<li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
-                        <h1 class="entry-title"><a href="/word2vec-tutorial-part-i-the-skip-gram-model.html">Word2Vec Tutorial Part I: The Skip-Gram Model</a></h1>
-<div class="post-info">
-	<ul>
-        <li class="vcard author">
-                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
-        </li>
-        <li class="published" title="2015-04-12T00:00:00+02:00">
-          on&nbsp;Sun 12 April 2015
-        </li>
-
-	</ul>
-<p>Category: <a href="/tag/deep-learning.html">   Deep Learning</a></p>
-</div><!-- /.post-info --><p>In many natural language processing tasks, words are often represented by their <em>tf-idf</em> scores.  While these scores give us some idea of a word's relative importance in a document, they do not give us any insight into its semantic meaning.  <em>Word2Vec</em> is the name given to a class of neural network models that, given an unlabelled training corpus, produce a vector for each word in the corpus that encodes its semantic information.  These vectors are usefull for two main reasons.</p>
-<ol>
-<li>We can measure the semantic similarity between two words are by calculating the cosine similarity between their corresponding word vectors.  </li>
-<li>We can use these word vectors as features for various supervised NLP tasks such as document classification, named entity recognition, and sentiment analysis.  The semantic information that is contained in these vectors make them powerful features for these tasks.</li>
-</ol>
-<p>You may ask <em>"how do we know that these vectors effectively capture the semantic meanings of the words?"</em>.  The answer is because the vectors adhere surprisingly well to our intuition.  For instance, words that we know to be synonyms tend to have similar vectors in terms of cosine similarity and antonyms tend to have dissimilar vectors.  Even more surprisingly, word vectors tend to obey the laws of analogy.  For example, consider the analogy <em>"Woman is to queen as man is to king"</em>.  It turns out that</p>
-<p>
-<div class="math">$$v_{queen}-v_{woman}+v_{man} \approx v_{king}$$</div>
-</p>
-<p>where <span class="math">\(v_{queen}\)</span>,<span class="math">\(v_{woman}\)</span>,<span class="math">\(v_{man}\)</span>, and <span class="math">\(v_{king}\)</span> are the word vectors for <span class="math">\(queen\)</span>, <span class="math">\(woman\)</span>, <span class="math">\(man\)</span>, and <span class="math">\(king\)</span> respectively.  These observations strongly suggest that word vectors encode valuable semantic information about the words that they represent. </p>
-<p>In this series of blog posts I will describe the two main <em>Word2Vec</em> models - the <em>skip-gram model</em> and the <em>continuous bag-of-words</em> model.</p>
-<p>Both of these models are simple neural networks with one hidden layer.  The word vectors are learned via backpropagation and stochastic gradient descent both of which I descibed in my previous <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">Deep Learning Basics</a> blog post.</p>
-<h1>The Skip-Gram Model</h1>
-<p>Before we define the <em>skip-gram</em> model, it would be instructive to understand the format of the training data that it accepts.  The input of the <em>skip-gram</em> model is a single word <span class="math">\(w_I\)</span> and the output is the words in <span class="math">\(w_I\)</span>'s context <span class="math">\(\{w_{O,1},...,w_{O,C}\}\)</span> defined by a word window of size <span class="math">\(C\)</span>.  For example, consider the sentence <em>"I drove my car to the store"</em>.  A potential training instance could be the word "car" as an input and the words {"I","drove","my","to","the","store"} as outputs.  All of these words are <em>one-hot</em> encoded meaning they are vectors of length <span class="math">\(V\)</span> (the size of the vocabulary) with a value of <span class="math">\(1\)</span> at the index corresponding to the word and zeros in all other indexes.  As you can see, we are essentially <em>creating</em> training examples from plain text which means that we can have a virtually unlimited number of training examples at our disposal.</p>
-<h2>Forward Propagation</h2>
-<p>Now let's define the <em>skip-gram</em> nerual network model as follows.</p>
-<p><img alt="skip-gram model" src="images/skip-gram.png" /> </p>
-<p>In the above model <span class="math">\(\mathbf{x}\)</span> represents the <em>one-hot</em> encoded vector corresponding to the input word in the training instance and <span class="math">\(\{\mathbf{y_1},...\mathbf{y_C}\}\)</span> are the <em>one-hot</em> encoded vectors corresponding to the output words in the training instance.  The <span class="math">\(V \times N\)</span> matrix <span class="math">\(\mathbf{W}\)</span> is the weight matrix between the input layer and hidden layer whose <span class="math">\(i^{th}\)</span> row represents the weights corresponding to the <span class="math">\(i^{th}\)</span> word in the vocabulary. This weight matrix <span class="math">\(\mathbf{W}\)</span> is what we are interested in learning because it contains the vector encodings of all of the words in our vocabulary (as its rows).  Each output word vector also has an associated <span class="math">\(N \times V\)</span> output matrix <span class="math">\(\mathbf{W'}\)</span>. There is also a hidden layer consisting of <span class="math">\(N\)</span> nodes (the exact size of <span class="math">\(N\)</span> is a training parameter).</p>
-<p>From my <a href="http://alexminnaar.com/deep-learning-basics-neural-networks-backpropagation-and-stochastic-gradient-descent.html">previous blog post</a>, we know that the input to a unit in the hidden layer <span class="math">\(h_i\)</span> is simply the weighted sum of its inputs.  Since the input vector <span class="math">\(\mathbf{x}\)</span> is <em>one-hot</em> encoded, the weights coming from the nonzero element will be the only ones contributing to the hidden layer.  Therefore, for the input <span class="math">\(\mathbf{x}\)</span> with <span class="math">\(x_k=1\)</span> and <span class="math">\(x_{k'}=0\)</span> for all <span class="math">\(k' \neq k\)</span> the outputs of the hidden layer will be equivalent to the <span class="math">\(k^{th}\)</span> row of <span class="math">\(\mathbf{W}\)</span>.  Or mathematically,</p>
-<p>
-<div class="math">$$\mathbf{h}=\mathbf{x}^T \mathbf{W}=\mathbf{W}_{(k, .)} := \mathbf{v}_{w_I}$$</div>
-</p>
-<p>Notice that there is no activation function used here.  This is presumably because the inputs are bounded by the <em>one-hot</em> encoding.  In the same way, the inputs to each of the <span class="math">\(C \times V\)</span> output nodes is computed by the weighted sum of its inputs.  Therefore, the input to the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word is</p>
-<p>
-<div class="math">$$u_{c,j}=\mathbf{v'}_{w_j}^T \mathbf{h}$$</div>
-</p>
-<p>However we can also observe that the output layers for each output word share the same weights therefore <span class="math">\(u_{c,j}=u_j\)</span>.  We can finally compute the output of the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word via the <em>softmax</em> function which produces a multinomial distribution </p>
-<p>
-<div class="math">$$p(w_{c,j}=w_{O,c} | w_I)=y_{c,j}=\frac{exp(u_{c,j})}{\sum_{j'=1}^V exp(u_{j'})}$$</div>
-</p>
-<p>In plain english, this value is the probability that the output of the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word is equal to the actual value of the <span class="math">\(j^{th}\)</span> index of the <span class="math">\(c^{th}\)</span> output vector (which is <em>one-hot</em> encoded).</p>
-<h2>Learning the Weights with Backpropagation and Stochastic Gradient Descent</h2>
-<p>Now that we know how inputs are propograted forward through the network to produce outputs, we can derive the error gradients necessary for the backpropagation algorithm which we will use to learn both <span class="math">\(\mathbf{W}\)</span> and <span class="math">\(\mathbf{W'}\)</span>.  The first step in deriving the gradients is defining a loss function.  This loss function will be</p>
-<p>
-<div class="math">$$\begin{align}
-E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
-&amp;= -\log \prod^C_{c=1} \frac{exp(u_{c,j^*_c})}{\sum^V_{j'=1} exp(u_j')} \\
-&amp;= -\sum^C_{c=1}u_{j^*_c} +C \cdot \log \sum^V_{j'=1} exp(u_{j'})
-\end{align}$$</div>
-</p>
-<p>which is simply the probability of the output words (the words in the input word's context) given the input word.  Here, <span class="math">\(j^*_c\)</span> is the index of the <span class="math">\(c^{th}\)</span> output word.  If we take the derivative with respect to <span class="math">\(u_{c,j}\)</span> we get</p>
-<p>
-<div class="math">$$\frac{\partial{E}}{\partial{u_{c,j}}}=y_{c,j}-t_{c,j}$$</div>
-</p>
-<p>where <span class="math">\(t_{c,j}=1\)</span> if the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> true output word is equal to <span class="math">\(1\)</span> (from its <em>one-hot</em> encoding), otherwise <span class="math">\(t_{c,j}=1\)</span>.  This is the prediction error for node <span class="math">\(c,j\)</span> (or the <span class="math">\(j^{th}\)</span> node of the <span class="math">\(c^{th}\)</span> output word).</p>
-<p>Now that we have the error derivative with respect to inputs of the final layer, we can derive the derivative with respect to the output matrix <span class="math">\(\mathbf{W'}\)</span>.  Here we use the chain rule </p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial E}{\partial w'_{ij}} &amp;=\sum^C_{c=1} \frac{\partial E}{\partial u_{c,j}} \cdot \frac{\partial u_{c,j}}{\partial w'_{ij}} \\
-&amp;=\sum^C_{c=1} (y_{c,j}-t_{c,j}) \cdot h_i
-\end{align}$$</div>
-</p>
-<p>Therefore the gradient descent update equation for the output matrix <span class="math">\(\mathbf{W'}\)</span> is</p>
-<p>
-<div class="math">$$w'^{(new)}_{ij} =w'^{(old)}_{ij}- \eta \cdot \sum^C_{c=1} (y_{c,j}-t_{c,j}) \cdot h_i$$</div>
-</p>
-<p>Now we can derive the update equation for the input-hidden layer weights in <span class="math">\(\mathbf{W}\)</span>.  Let's start by computing the error derivative with respect to the hidden layer.</p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial{E}}{\partial{h_i}} &amp;=\sum^V_{j=1} \frac{\partial{E}}{\partial{u_j}} \cdot \frac{\partial{u_j}}{\partial{h_i}}  \\
-&amp;=\sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij}
-\end{align}$$</div>
-</p>
-<p>Now we are able to compute the derivative with respect to <span class="math">\(\mathbf{W}\)</span></p>
-<p>
-<div class="math">$$\begin{align}
-\frac{\partial{E}}{\partial{w_{ki}}} &amp;=\frac{\partial{E}}{\partial{h_i}} \cdot \frac{\partial{h_i}}{\partial{w_{ki}}} \\
-&amp;= \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_k
-\end{align}$$</div>
-</p>
-<p>and finally we arrive at our gradient descent equation for our input weights</p>
-<p>
-<div class="math">$$w^{(new)}_{ij} =w^{(old)}_{ij}- \eta \cdot \sum^V_{j=1} \sum^C_{c=1} (y_{c,j}-t_{c,j})  \cdot w'_{ij} \cdot x_j$$</div>
-</p>
-<p>As you can see, each gradient descent update requires a sum over the entire vocabulary <span class="math">\(V\)</span> which is computationally expensive.  In practice, computation techniques such as hierarchical softmax and negative sampling are used to make this computation more efficient.</p>
-<h2>References</h2>
-<ul>
-<li><a href="word2vec-tutorial-part-ii-the-continuous-bag-of-words-model.html">Word2Vec Tutorial Part II: The Continuous Bag-of-Words Model</a></li>
-<li><a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a>, Mikolov et al.</li>
-<li><a href="http://arxiv.org/abs/1103.0398">Natural Language Processing (almost) from Scratch</a>, Collobert et al.</li>
-</ul>
-<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
-    var mathjaxscript = document.createElement('script');
-    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
-    mathjaxscript.type = 'text/javascript';
-    mathjaxscript.src = '//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML';
-    mathjaxscript[(window.opera ? "innerHTML" : "text")] =
-        "MathJax.Hub.Config({" +
-        "    config: ['MMLorHTML.js']," +
-        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'AMS' } }," +
-        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
-        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
-        "    displayAlign: 'center'," +
-        "    displayIndent: '0em'," +
-        "    showMathMenu: true," +
-        "    tex2jax: { " +
-        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
-        "        displayMath: [ ['$$','$$'] ]," +
-        "        processEscapes: true," +
-        "        preview: 'TeX'," +
-        "    }, " +
-        "    'HTML-CSS': { " +
-        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'black ! important'} }" +
-        "    } " +
-        "}); ";
-    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
-}
-</script>
-                    </article>
-                </div>
-            </aside><!-- /#featured -->
-            
-        
-        
-
-    
-            <aside id="featured">
-                <div class="body">
-                    <article>
                         <h1 class="entry-title"><a href="/distributed-online-latent-dirichlet-allocation-with-apache-spark.html">Distributed Online Latent Dirichlet Allocation with Apache Spark</a></h1>
 <div class="post-info">
 	<ul>
@@ -1265,9 +1005,654 @@ E &amp;= -\log p(w_{O,1}, w_{O,2}, ..., w_{O,C} | w_I) \\
 }
 </script>
                     </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/building-a-shoutbox-app-with-cassandra-and-nodejs.html">Building a Shoutbox App with Cassandra and Node.js</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-02-08T00:00:00+01:00">
+          on&nbsp;Sun 08 February 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>In this blog post I wanted to provide a demonstration of how to use the Cassandra database system in a practical web application.  We'll create a shoutbox app which you can think of as a very simple version of Twitter.</p>
+<h1>What is Cassandra?</h1>
+<p>Cassandra is a NoSQL distributed database system that is designed to deal with large amounts of data.  Its key advantages are the following.</p>
+<ul>
+<li><strong>Scalability:</strong>  Allows you to increase capacity by adding cheap commodity hardware without any downtime.</li>
+<li><strong>Fault Tolerant:</strong>  There is data replications and no single point of failure so if a node goes down the system remains operational.</li>
+<li><strong>Linear Performance:</strong> Throughput increases linearly with the number of nodes in the cluster.</li>
+<li><strong>Data Flexibility:</strong>  Supports many data formats and allows for a variable number of columns for each row.</li>
+</ul>
+<p>In terms of the <a href="http://en.wikipedia.org/wiki/CAP_theorem">CAP theorem</a>, Cassandra values availability and partition tolerance at the expence of consistency.  This means that Cassandra uses <em>eventual consistency</em> which means that eventually the system will reach a consistent state but at any given time it is possible that different nodes can hold different versions of the same data.  The actual architecture of Cassandra is beyond the scope of this blog post but it involves commit logs, memtables, and peer-to-peer gossip protocols.</p>
+<h1>How does Cassandra Work?</h1>
+<h2>Column Families</h2>
+<p>Column families are similar to RDMS tables.  Cassandra is a <em>column-oriented</em> database which means that columns are defined beforehand as well as the data format that each column can hold.  Unlike the RDMS system, rows in Cassandra can contain any number of columns in any order like in the following example.</p>
+<p><img alt="column family example" src="images/static_column_family.png" /></p>
+<p>Cassandra also offers <em>dynamic</em> column families which allows the user to create a row that contains precomputed results that can be quickly retrieved.  This is why Cassandra is described as a <em>key-value</em> database where column <em>values</em> can be quickly lookedup by their associated row <em>key</em>. </p>
+<h2>Keyspaces</h2>
+<p>Cassandra Keyspaces are similar to schemas in RDMS databases.  A keyspace groups and applications column families together.  Replication is done on a <em>per-keyspace</em> basis so data that resides in the same keyspace is replicated in the same way.  There is usually one keyspace per application.</p>
+<h2>Denormalization</h2>
+<p>One of the disadvantages of Cassandra compared to RDMS databases is that it is not well-suited for ad-hoc complex queries.  As a result you must know what queries you will need to perform beforehand and create your keyspaces accordingly.  Cassandra does not have the same foreign key relationships that RDMS databases have therefore you cannot <em>join</em> multiple column families.  As a consequence, the data that you want to retrieve in your queries should be contained in the same column family.  Therefore the queries that you plan on performing will define your data model.</p>
+<h1>Building a Shoutbox App</h1>
+<p>Say you have developed a Twitter-like app where users can post their thoughts (shouts) as well as follow other users.  Let's also assume that this app has exploded in popularity to the point where RDMS systems can no longer handle the huge amount of data so you turn to Cassandra.  Let's learn how an app such as this can interact with Cassandra.</p>
+<h2>Queries we will Use</h2>
+<p>As stated previously, Cassandra uses denormalization which means that we need to first decide what queries we want to perform, then optimize our data model according to these queries.  In our shoutbox app we would like to</p>
+<ul>
+<li>Show all users.</li>
+<li>Show who a user is following.</li>
+<li>Show who is following a user.</li>
+<li>Show the shouts of a particular user.</li>
+<li>Show all shouts.</li>
+</ul>
+<p>Consequently, we will create the following column families to accomodate these queries.</p>
+<ul>
+<li><strong>USERS</strong> which will contain <em>username</em> and <em>password</em> columns.</li>
+<li><strong>FOLLOWING</strong> which will contain <em>username</em> and <em>followed</em> columns.</li>
+<li><strong>FOLLOWERS</strong> which will contain <em>username</em> and <em>following</em> columns.</li>
+<li><strong>SHOUTS</strong> which will contain <em>shout_id</em>, <em>username</em>, and <em>body</em> columns.</li>
+<li><strong>USERSHOUTS</strong> which will contain <em>username</em>, <em>shout_id</em>, and <em>body</em> columns.</li>
+<li><strong>SHOUTWALL</strong> which will contain <em>username</em>, <em>shout_id</em>, <em>posted_by</em> and <em>body</em> columns.</li>
+</ul>
+<p>It may seem redundant to create all of these column families from the RDMS perspective but denomalization is necessary in Cassandra.</p>
+<h2>Creating the Column Families</h2>
+<p>We can actually create these column families using the CQL shell.  But first we have to create the keyspace for our app which we will call <code>shoutkeyspace</code>.</p>
+<div class="highlight"><pre>CREATE KEYSPACE shoutkeyspace WITH REPLICATION - {&#39;class&#39; : &#39;SimpleStrategy&#39;, &#39;replication_factor&#39; : 3};
+</pre></div>
+
+
+<p>In this example we will not be using multiple data centers so <code>SimpleStrategy</code> replication is used rather than  <code>NetworkTopology</code>.  We also use a <code>replication_factor</code> of 3 which indicates that our data will be replicated 3 times in our cluster.  We will use this keyspace to create our column families with the <code>USE shoutkeyspace;</code> command.</p>
+<p>Let's first create the <strong>USERS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE users(username text PRIMARY KEY, password text);
+</pre></div>
+
+
+<p>and now the <strong>FOLLOWING</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE following(username text PRIMARY KEY, followed text);
+</pre></div>
+
+
+<p>and now the <strong>FOLLOWERS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE followers(username text PRIMARY KEY, following text);
+</pre></div>
+
+
+<p>and now the <strong>SHOUTS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE shouts(shout_id uuid PRIMARY KEY, username text, body text);
+</pre></div>
+
+
+<p>and now the <strong>USERSHOUTS</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE usershouts(username text, shout_id timeuuid, body text, PRIMARY KEY(username, shout_id));
+</pre></div>
+
+
+<p>and finally the <strong>SHOUTWALL</strong> column family.</p>
+<div class="highlight"><pre>CREATE TABLE shoutwall(username text, shout_id timeuuid, posted_by text, body text, PRIMARY KEY(username, shout_id));
+</pre></div>
+
+
+<p>The columns associated with a <code>PRIMARY KEY</code> indicate the fields by which we will want to search our column families in our queries.</p>
+<h2>Inserting/Selecting Data</h2>
+<p>Inserting data into these column families will be done within the Node.js application but here is an example CQL statment to give you some idea.</p>
+<div class="highlight"><pre>INSERT INTO users(username, password) VALUES (&#39;user1&#39;, &#39;password1&#39;);
+</pre></div>
+
+
+<p>Obviously this example is purely instructive and in a real-world application more security would be used with respect to storing passwords.  You can also use batch commands to insert multiple values at once.  Selecting data can also be done with the normal SQL syntax, note however that <code>WHERE</code> clauses can only be applied to indexed fields (i.e. fields that are assigned a primary key).</p>
+<h1>Creating the Node.js Frontend</h1>
+<p>The first step in creating a Node.js frontend that interacts with Cassandra is adding the <a href="https://github.com/datastax/nodejs-driver">Node.js Cassandra client driver</a> to the <em>package.json</em> file.  This driver will enable us to connect with the Cassandra database that we have just created.  This can be done with the following code which should be added to the <em>app.js</em> file as well as any javascript file in which a Cassandra connection is made.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">client</span><span class="o">=</span><span class="k">new</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">Client</span><span class="p">({</span><span class="nx">contactPoint</span> <span class="o">:</span> <span class="p">[</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">]});</span>
+<span class="nx">client</span><span class="p">.</span><span class="nx">connect</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
+    <span class="nx">consolde</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;cassandra connected&#39;</span><span class="p">)</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>Note that in the above code we are connecting to a local instance of Cassandra.  This <code>client</code> variable is what we will be using to execute our Cassandra queries</p>
+<h2>Displaying Users</h2>
+<p>The most basic function that we want our app to perform is displaying all of the users.  To this end, we create a <em>users.js</em> file in the <em>routes</em> folder and add the following code.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllUsers</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllUsers</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+    <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,{</span>
+            <span class="nx">users</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+        <span class="p">});</span>
+    <span class="p">}</span>
+  <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>As you can see, the query to select all rows from the <code>users</code> column family is first saved as a string variable.  Then inside the <code>router.get()</code> function, the Cassandra <code>client</code> variable that we defined eariler executes this query and if it is successfull, the corresponding <code>users</code> view is rendered with the query result.  The <code>users</code> view is a <em>jade</em> file and for the purposes of this example it is very simple.</p>
+<div class="highlight"><pre>block content
+    h1 Users
+    ul
+        each user, i in users
+            li #{user.username}
+</pre></div>
+
+
+<p>The <code>each user, i in users</code> line loops through the query result from <em>users.js</em> and the resulting usernames are displayed in a list with <code>#{user.username}</code>.</p>
+<h2>Selecting Individual Users</h2>
+<p>Next we want to be able to select individual users from this list which will navigate us to a new page showing the selected user's information.  We create a new file in the <em>routes</em> folder called <em>user.js</em> and the code is very similar to what we have seen before.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">,{</span>
+                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
+                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
+                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>You may have noticed the strange <code>WHERE username = ?</code> in the query string.  This is because we have to be told which username we are selecting.  This variable is passed into our query by the <code>[req.params.username]</code> parameter.  If the query is executed successfully, the specified user's <code>username</code>, <code>email</code>, and <code>full_name</code> fields are sent to the <em>user</em> view.  Again, the view is quite simple.  It simply displays the fields sent to it in <em>user.js</em>.</p>
+<div class="highlight"><pre>block content
+    h1 User Info
+    ul
+        li Name:
+            strong #{full_name}
+        li Username:
+            strong #{username}
+        li Email Address
+            strong #{email}
+</pre></div>
+
+
+<h2>Adding Users</h2>
+<p>Just like before we need to add a route and a view for adding a user.  Let's call the route <em>adduser.js</em>.  This will involve both a <em>GET</em> and a <em>POST</em> HTTP request - we need to get the data from the <em>adduser</em> form and then post it to Cassandra.</p>
+<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;adduser&#39;</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
+        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
+                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Added&#39;</span><span class="p">);</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>So first we use use a GET request to render the <em>adduser</em> view.  This view contains the form where the required data is added (<em>username</em>, <em>password</em>, <em>email</em>, <em>full_name</em>).</p>
+<div class="highlight"><pre>block content
+    h1 Add User
+    form#formAddUser(name=&quot;adduser&quot;, method=&quot;post&quot;, action=&quot;/adduser&quot;)
+        div
+            input#inputUserName(type=&quot;text&quot;, placeholder=&quot;Enter Username&quot; name=&quot;username&quot;)
+        div
+            input#inputPassword(type=&quot;password&quot;, placeholder=&quot;Enter Password&quot; name=&quot;password&quot;)
+        div
+            input#inputEmail(type=&quot;text&quot;, placeholder=&quot;Enter Email&quot; name=&quot;email&quot;)
+        div
+            input#inputFullName(type=&quot;text&quot;, placeholder=&quot;Enter Full Name&quot; name=&quot;full_name&quot;)
+        div
+            button#btnSubmit(type=&quot;submit&quot;) Submit
+</pre></div>
+
+
+<p>Then we define our query to insert a new user into our Cassandra <em>users</em> column family. We then execute this query with the required fields and if successfull we redirect to the <em>users</em> view which should now contain our new user.</p>
+<h2>Updating Users</h2>
+<p>We also want the ability for a user to update their information. To edit a user's information, we want to present the same form as when the user was intially added with the same information already in the form's fields so that modification is easy.  Again, let's make an <em>edituser</em> route and view.  The <em>edituser.js</em> route looks like the following.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getByUsername</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.users WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getByUsername</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;edituser&#39;</span><span class="p">,</span> <span class="p">{</span>
+                <span class="nx">username</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">username</span><span class="p">,</span>
+                <span class="nx">email</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">email</span><span class="p">,</span>
+                <span class="nx">full_name</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">full_name</span><span class="p">,</span>
+                <span class="nx">password</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">password</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">upsertUser</span>  <span class="o">=</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.users(username, password, email, full_name) VALUES(?,?,?,?)&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">upsertUser</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">password</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">full_name</span><span class="p">],</span>
+        <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+            <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span><span class="p">{</span>
+                <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;User Updated&#39;</span><span class="p">);</span>
+                <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>First we execute a Cassandra query to get the information needed to populate the form.  When this is executed, the <em>edituser</em> view is rendered with form information from the query result appearing in the fields.  The rest is exactly the same as <em>adduser</em>.  Furthermore, the <em>edituser</em> view is almost exactly the same as the <em>adduser.js</em> view (with <code>action=/adduser</code> replaced with <code>action=/edituser</code> and the passed in values added) so I will not show it.</p>
+<h2>Deleting Users</h2>
+<p>We also want to be able to delete users.  To do this we add the following code to the <em>user.js</em> route.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">deleteUser</span> <span class="o">=</span> <span class="s2">&quot;DELETE FROM shoutkeyspace.users WHERE username = ?&quot;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="k">delete</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">deleteUser</span><span class="p">,[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>First we create the delete query and execute it as usual.  However, we still need a way of creating this <em>DELETE</em> request when the <em>deleteuser</em> button is clicked.  We will do this with JQuery and AJAX.  We create a <em>main.js</em> file in the <em>/public/javascripts</em> folder which contains the following JQuery code.</p>
+<div class="highlight"><pre><span class="nx">$</span><span class="p">(</span><span class="nb">document</span><span class="p">).</span><span class="nx">ready</span><span class="p">(</span><span class="kd">function</span><span class="p">(){</span>
+    <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;click&#39;</span><span class="p">,</span> <span class="nx">deleteUser</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="kd">function</span> <span class="nx">deleteUser</span><span class="p">(){</span>
+    <span class="nx">event</span><span class="p">.</span><span class="nx">preventDefault</span><span class="p">();</span>
+
+    <span class="kd">var</span> <span class="nx">confirmation</span> <span class="o">=</span> <span class="nx">confirm</span><span class="p">(</span><span class="s1">&#39;Are you sure that you want to delete this user?&#39;</span><span class="p">);</span>
+
+    <span class="k">if</span><span class="p">(</span><span class="nx">confirmation</span><span class="p">){</span>
+        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">({</span>
+            <span class="nx">type</span><span class="o">:</span> <span class="s1">&#39;DELETE&#39;</span><span class="p">,</span>
+            <span class="nx">url</span><span class="o">:</span> <span class="s1">&#39;/user/&#39;</span><span class="o">+</span> <span class="nx">$</span><span class="p">(</span><span class="s1">&#39;.deleteuser&#39;</span><span class="p">).</span><span class="nx">data</span><span class="p">(</span><span class="s1">&#39;user&#39;</span><span class="p">)</span>
+        <span class="p">}).</span><span class="nx">done</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">){</span>
+            <span class="nb">window</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="s1">&#39;/users&#39;</span><span class="p">);</span>
+        <span class="p">});</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="kc">false</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>So when the <em>deleteuser</em> button is clicked, the <em>deleteUser()</em> function is called which uses AJAX to send the <em>DELETE</em> request to the correct URL.</p>
+<h2>Displaying Shouts</h2>
+<p>Now let's turn our attention to displaying shouts.  Again we must create a <em>shouts</em> route and view.  Our <em>shouts.js</em> route should look like the following.</p>
+<div class="highlight"><pre><span class="kd">var</span> <span class="nx">getAllShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.shouts&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getAllShouts</span><span class="p">,[],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
+                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+
+<span class="kd">var</span> <span class="nx">getUserShouts</span> <span class="o">=</span> <span class="s1">&#39;SELECT * FROM shoutkeyspace.usershouts WHERE username = ?&#39;</span><span class="p">;</span>
+
+<span class="nx">router</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/:username&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span><span class="nx">getUserShouts</span><span class="p">,</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">username</span><span class="p">],</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">result</span><span class="p">){</span>
+        <span class="k">if</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">).</span><span class="nx">send</span><span class="p">({</span><span class="nx">msg</span><span class="o">:</span> <span class="nx">err</span><span class="p">});</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="s1">&#39;shouts&#39;</span><span class="p">,{</span>
+                <span class="nx">shouts</span><span class="o">:</span> <span class="nx">result</span><span class="p">.</span><span class="nx">rows</span>
+            <span class="p">});</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>By now, this should be quite straight-forward.  The first <em>GET</em> request displays all shouts to the <em>shouts</em> view from the Cassandra query and the second <em>GET</em> request displays a specified user's shouts to the <em>shouts</em> view from another Cassandra query.</p>
+<h2>Adding Shouts</h2>
+<p>The final piece of the puzzle is enabling users to add shouts.  On the view side, this can be done with the following form.</p>
+<div class="highlight"><pre>form#formAddShout(name=&quot;addshout&quot;, method=&quot;post&quot;, action=&quot;/addshout&quot;)
+        div
+            select(name=&quot;username&quot;)
+                option(value=&quot;devuser1&quot;) devuser1
+                option(value=&quot;devuser2&quot;) devuser2
+                option(value=&quot;devuser3&quot;) devuser3
+                option(value=&quot;devuser4&quot;) devuser4
+        br
+        div
+            textarea(name=&quot;body&quot;, placeholder=&quot;Shout Something!&quot;, cols=&quot;50&quot;, rows=&quot;5&quot;)
+        br
+        div
+            button#btnSubmit(type=&quot;submit&quot;) Submit
+</pre></div>
+
+
+<p>This form contains a textarea in which the user can write their shout as well as the ability to post it as a specific user (ideally you would have a login system but this is beyond the scope of this app).  Next we create the route as the following.</p>
+<div class="highlight"><pre><span class="nx">router</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">){</span>
+    <span class="kd">var</span> <span class="nx">id1</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">uuid</span><span class="p">();</span>
+    <span class="kd">var</span> <span class="nx">id2</span> <span class="o">=</span> <span class="nx">cassandra</span><span class="p">.</span><span class="nx">types</span><span class="p">.</span><span class="nx">timeuuid</span><span class="p">();</span>
+
+    <span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.shouts(shout_id, username, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
+            <span class="nx">params</span><span class="o">:</span><span class="p">[</span><span class="nx">id1</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="nx">query</span><span class="o">:</span> <span class="s1">&#39;INSERT INTO shoutkeyspace.usershouts(username, shout_id, body) VALUES(?,?,?)&#39;</span><span class="p">,</span>
+            <span class="nx">params</span><span class="o">:</span> <span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">username</span><span class="p">,</span> <span class="nx">id2</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">body</span><span class="p">.</span><span class="nx">body</span><span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">];</span>
+    <span class="nx">queryOptions</span> <span class="o">=</span> <span class="p">{};</span>
+    <span class="nx">client</span><span class="p">.</span><span class="nx">batch</span><span class="p">(</span><span class="nx">queries</span><span class="p">,</span> <span class="nx">queryOptions</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">){</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="nx">res</span><span class="p">.</span><span class="nx">redirect</span><span class="p">(</span><span class="s1">&#39;/shouts&#39;</span><span class="p">);</span>
+    <span class="p">});</span>
+<span class="p">});</span>
+</pre></div>
+
+
+<p>Here we use a Cassandra batch query to insert the added shout into both the <code>shouts</code> and <code>usershouts</code> keyspaces.</p>
+<p>And that covers the basic functionality of our simple shoutbox app.  In summary, we have given a brief overview of Cassandra, added our keyspaces and column families for our app as well a built a Node.js frontend to connect with our Cassandra database.</p>
+<h2>References</h2>
+<ul>
+<li><a href="https://github.com/alexminnaar/shoutApp">Github repo</a> for the code used in this blog post.</li>
+<li><a href="http://www.datastax.com/">Datastax</a> where you can download the free Cassandra community edition as well as learn more about Cassandra.</li>
+<li><a href="http://nodejs.org/">nodejs.org</a> where you can download and learn more about Node.js. </li>
+</ul>
+                    </article>
+                </div>
+            </aside><!-- /#featured -->
+            
+        
+        
+
+    
+            <aside id="featured">
+                <div class="body">
+                    <article>
+                        <h1 class="entry-title"><a href="/building-a-distributed-binary-search-tree-with-akka.html">Building a Distributed Binary Search Tree with Akka</a></h1>
+<div class="post-info">
+	<ul>
+        <li class="vcard author">
+                 by&nbsp;<a class="url fn" href="/author/alex-minnaar.html">Alex Minnaar</a>
+        </li>
+        <li class="published" title="2015-01-05T00:00:00+01:00">
+          on&nbsp;Mon 05 January 2015
+        </li>
+
+	</ul>
+<p>Category: <a href="/tag/software-engineering.html">   Software Engineering</a></p>
+</div><!-- /.post-info --><p>In this blog post I will descibe an interesting Akka mini-project that I came across which helped me gain a deeper understanding of Akka's asynchronous actor model.  In this project we use Akka to build a distributed binary search tree where each node in the tree is an actor which allows it to be a completely asynchronous, concurrent, and distributed version of the traditional data structure.  But before we get into the Akka stuff, it would be helpful to remind ourselves of some of the basic properties of a binary search tree.</p>
+<h2>Binary Search Tree Basics</h2>
+<p>A binary search tree is a tree-based data structure with the following properites</p>
+<ol>
+<li>Each node in the tree stores an element and can have at most two child nodes.</li>
+<li>The tree does not contain any duplicate values.</li>
+<li>Elements in a node's left subtree are strictly smaller than the node's element.</li>
+<li>Elements in a node's right subtree are strictly greater than the node's element.</li>
+</ol>
+<p><img alt="binary search tree" src="images/Binary_search_tree.svg" /> </p>
+<p>There are also three main tasks a binary search tree can perform.</p>
+<ul>
+<li><strong>Contains</strong>: Determine if a node containing a particular element exists in the tree by performing a binary tree search.  This is done by starting at the root node and recursively searching the tree by selecting the left or right subtree based on the node's value and the value that we are searching for.  We know that the value does not exist in the tree if we reach an external node and have not yet found it. </li>
+<li><strong>Insert</strong>: Insert a new node in the correct place in the tree given its value.  This is also done with a tree search.  Assuming the element does not already exist in the tree, we search for the value that we wish to insert until we arrive at an external node at which point we add the new node as its right or left child depending on its value.</li>
+<li><strong>Remove</strong>: Remove an element from the tree and rearrange the remaining nodes in order to keep the desired structure.  If the node you wish to delete is an external node you simply remove it, however if it has children it is more complicated.  One way to deal with this is to identify its in-order predecessor in the left subtree.  This is the greatest element in the left subtree which can be found by recursively selecting the right child within this subtree (in other words it is the right-most element in the left subtree).  This in-order predecessor is then removed (it is an external node so this is simple) and is used to replace the node that is to be deleted.  The opposite procedure would work as well (i.e. replacing the node with its in-order successor in the right subtree).</li>
+</ul>
+<p>Before we create an Akka application that implements a binary search tree let's briefly review the basics of the actor model.</p>
+<h2>Actor Model Basics</h2>
+<p>Actors are completely incapsulated, asynchronous entities that are each designed to perform a specific task.  The only way that actors can communicate with each other is through message passing.  Message passing is asynchronous meaning an actor can send a message and then immediately continue performing other tasks (it doesn't have to wait for a response).  When a message is sent to an actor, it is put in a queue and the actor performs the tasks corresponding to each message sequentially, therefore actors are themselves single-threaded.  Furthermore, due to these properties, actors can be distributed in a cluster with essentially the same code as if they were on the same machine which makes things very convenient.</p>
+<p>Now let's start to build our Akka application.</p>
+<h2>Tree Nodes as Actors</h2>
+<p>We will create one main actor called <code>BinaryTreeSet</code> which receives the <code>Contains</code>, <code>Insert</code>, and <code>Remove</code> messages for the entire tree.  As stated previously, each node of the tree will also be an actor which we will call <code>BinaryTreeNode</code>.  Actors usually incapsulate an immutable state.  The <code>BinaryTreeSet</code> actor's state contains the root node of the tree which is a <code>BinaryTreeNode</code> actor.  Each <code>BinaryTreeNode</code> actor's state contains the value that the node holds as well as references to its two children (which are also <code>BinaryTreeNode</code> actors).</p>
+<p>Let's first focus on the <code>BinaryTreeSet</code> actor.  An actor class extends Akka's <code>Actor</code> trait and its messages are customarily defined in its companion object as case classes. The following code implements this companion object.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">BinaryTreeSet</span> <span class="o">{</span>
+
+  <span class="k">trait</span> <span class="nc">Operation</span> <span class="o">{</span>
+    <span class="k">def</span> <span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span>
+    <span class="k">def</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span>
+    <span class="k">def</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span>
+  <span class="o">}</span>
+
+  <span class="k">trait</span> <span class="nc">OperationReply</span> <span class="o">{</span>
+    <span class="k">def</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span>
+  <span class="o">}</span>
+
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Operation</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Contains</span><span class="o">(</span><span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Operation</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">Remove</span><span class="o">(</span><span class="n">requester</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">,</span> <span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Operation</span>
+  <span class="k">case</span> <span class="k">class</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">OperationReply</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>The <code>Insert</code>, <code>Contains</code>, and <code>Remove</code> messages each have three fields</p>
+<ul>
+<li><code>requester</code> which is a reference to the actor that sent the request.</li>
+<li><code>id</code> which is a unique id for the message.</li>
+<li><code>elem</code> which is the value to be inserted (<code>Insert</code>), removed (<code>Remove</code>) or searched for (<code>Contains</code>).</li>
+</ul>
+<p>There is also an <code>OperationFinished</code> message which is sent back to the <code>BinaryTreeSet</code> actor when the operation specified by the <code>id</code> field is finished.  </p>
+<p>Now let's look at the <code>BinaryTreeSet</code> actor class.  </p>
+<div class="highlight"><pre><span class="k">class</span> <span class="nc">BinaryTreeSet</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeSet._</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeNode._</span>
+
+  <span class="k">def</span> <span class="n">createRoot</span><span class="k">:</span> <span class="kt">ActorRef</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">BinaryTreeNode</span><span class="o">.</span><span class="n">props</span><span class="o">(</span><span class="mi">0</span><span class="o">,</span> <span class="n">initiallyRemoved</span> <span class="k">=</span> <span class="kc">true</span><span class="o">))</span>
+
+  <span class="k">var</span> <span class="n">root</span> <span class="k">=</span> <span class="n">createRoot</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="n">normal</span>
+
+  <span class="k">val</span> <span class="n">normal</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="n">operation</span><span class="k">:</span> <span class="kt">Operation</span> <span class="o">=&gt;</span> <span class="n">root</span> <span class="o">!</span> <span class="n">operation</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Here the tree's root node actor <code>root</code> is created using the <code>context.actorOf</code> method.  The <code>Receive</code> method accepts <code>Operation</code> messages and sends them to <code>root</code>.  Essentially, all messages are sent to the root node and are executed within nodes of the tree which are <code>BinaryTreeNode</code> actors.  So let's look at the <code>BinaryTreeNode</code> implementation.</p>
+<div class="highlight"><pre><span class="k">object</span> <span class="nc">BinaryTreeNode</span> <span class="o">{</span>
+  <span class="k">trait</span> <span class="nc">Position</span>
+
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Left</span> <span class="k">extends</span> <span class="nc">Position</span>
+  <span class="k">case</span> <span class="k">object</span> <span class="nc">Right</span> <span class="k">extends</span> <span class="nc">Position</span>
+
+  <span class="k">def</span> <span class="n">props</span><span class="o">(</span><span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">initiallyRemoved</span><span class="k">:</span> <span class="kt">Boolean</span><span class="o">)</span> <span class="k">=</span> <span class="nc">Props</span><span class="o">(</span><span class="n">classOf</span><span class="o">[</span><span class="kt">BinaryTreeNode</span><span class="o">],</span>  <span class="n">elem</span><span class="o">,</span> <span class="n">initiallyRemoved</span><span class="o">)</span>
+<span class="o">}</span>
+<span class="k">class</span> <span class="nc">BinaryTreeNode</span><span class="o">(</span><span class="k">val</span> <span class="n">elem</span><span class="k">:</span> <span class="kt">Int</span><span class="o">,</span> <span class="n">initiallyRemoved</span><span class="k">:</span> <span class="kt">Boolean</span><span class="o">)</span> <span class="k">extends</span> <span class="nc">Actor</span> <span class="o">{</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeNode._</span>
+  <span class="k">import</span> <span class="nn">BinaryTreeSet._</span>
+
+  <span class="k">var</span> <span class="n">subtrees</span> <span class="k">=</span> <span class="nc">Map</span><span class="o">[</span><span class="kt">Position</span>, <span class="kt">ActorRef</span><span class="o">]()</span>
+  <span class="k">var</span> <span class="n">removed</span> <span class="k">=</span> <span class="n">initiallyRemoved</span>
+
+  <span class="k">def</span> <span class="n">receive</span> <span class="k">=</span> <span class="n">normal</span>
+
+  <span class="k">val</span> <span class="n">normal</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{...}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Where the <code>subtrees</code> map holds the node's left and right children which are themselves <code>BinaryTreeNode</code> actors. The <code>Receive</code> method is left blank so that we can look at the <code>Operation</code> message implementations in more detail.  Let's do this now.</p>
+<h3>Contains Messages</h3>
+<p>As mentioned previously, a binary tree can be searched by recursively selecting each child depending on the value of the current node and the value of the element that is being searched for until either the element is found or an external node is reached.  The child to select can be found using this simple function</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToFind</span><span class="k">:</span> <span class="kt">Int</span><span class="o">)</span><span class="k">:</span> <span class="kt">Position</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">elemToFind</span> <span class="o">&gt;</span> <span class="n">elem</span><span class="o">)</span> <span class="nc">Right</span>
+    <span class="k">else</span> <span class="nc">Left</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>We can now implement the functionality to process <code>Contains</code> messages as follows.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">Contains</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToFind</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">elem</span> <span class="o">!=</span> <span class="n">elemToFind</span> <span class="o">||</span> <span class="o">(</span><span class="n">elem</span> <span class="o">==</span> <span class="n">elemToFind</span> <span class="o">&amp;&amp;</span> <span class="n">removed</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">child</span> <span class="k">=</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToFind</span><span class="o">)</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">child</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">subtrees</span><span class="o">(</span><span class="n">child</span><span class="o">)</span> <span class="o">!</span> <span class="nc">Contains</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToFind</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">requester</span> <span class="o">!</span> <span class="nc">ContainsResult</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="kc">false</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="k">else</span> <span class="o">{</span>
+        <span class="n">requester</span> <span class="o">!</span> <span class="nc">ContainsResult</span><span class="o">(</span><span class="n">id</span><span class="o">,</span> <span class="kc">true</span><span class="o">)</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Basically, if the desired value is in the current node and hasn't been removed then the <code>ContainsResult(id, true)</code> message is sent back to the requester.  If it is not and it is not an external node, then the same message is sent to the correct child.  If it is an external node then the element does not exist in the tree and a <code>ContainsResult(id, false)</code> is sent back to the requester.</p>
+<h3>Insert Messages</h3>
+<p><code>Insert</code> messages can be handled in a similar way.  Again we search the tree and when we get to an external node we create a new <code>BinaryTreeNodeActor</code> that holds the element to insert and add this node to the external node's <code>subtree</code> map.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToInsert</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">elem</span> <span class="o">!=</span> <span class="n">elemToInsert</span> <span class="o">||</span> <span class="o">(</span><span class="n">elem</span> <span class="o">==</span> <span class="n">elemToInsert</span> <span class="o">&amp;&amp;</span> <span class="n">removed</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">child</span> <span class="k">=</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToInsert</span><span class="o">)</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">child</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">subtrees</span><span class="o">(</span><span class="n">child</span><span class="o">)</span> <span class="o">!</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToInsert</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">subtrees</span> <span class="o">+=</span> <span class="o">(</span><span class="n">child</span> <span class="o">-&gt;</span> <span class="n">context</span><span class="o">.</span><span class="n">actorOf</span><span class="o">(</span><span class="nc">BinaryTreeNode</span><span class="o">.</span><span class="n">props</span><span class="o">(</span><span class="n">elemToInsert</span><span class="o">,</span> <span class="kc">false</span><span class="o">)))</span>
+          <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="k">else</span> <span class="o">{</span>
+        <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<h3>Remove Messages</h3>
+<p>Remove messages are more difficult to deal with.  We will not be implementing the same removal procedure as described in <em>Binary Search Tree Basics</em>.  Unlike node search and insertion, node removal results in a tree restructuring.  This is problematic in aysnchronous applications.  For example, what if  a removal causes a tree restructuring that occurs while other messages are still being processed and coming in? Synchronization is required for tree restructuring which does not fit within the actor model.  For this reason, we will handle removal by giving each node a <code>removed</code> flag that indicates if the node has been removed.  This way, removal occurs by simply setting the <code>removed</code> flag to <code>true</code>.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">Remove</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToRemove</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">elem</span> <span class="o">!=</span> <span class="n">elemToRemove</span> <span class="o">||</span> <span class="o">(</span><span class="n">elem</span><span class="o">==</span><span class="n">elemToRemove</span> <span class="o">&amp;&amp;</span> <span class="n">removed</span><span class="o">))</span> <span class="o">{</span>
+
+        <span class="k">val</span> <span class="n">child</span> <span class="k">=</span> <span class="n">childToVisit</span><span class="o">(</span><span class="n">elemToRemove</span><span class="o">)</span>
+
+        <span class="k">if</span> <span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">contains</span><span class="o">(</span><span class="n">child</span><span class="o">))</span> <span class="o">{</span>
+          <span class="n">subtrees</span><span class="o">(</span><span class="n">child</span><span class="o">)</span> <span class="o">!</span> <span class="nc">Remove</span><span class="o">(</span><span class="n">requester</span><span class="o">,</span> <span class="n">id</span><span class="o">,</span> <span class="n">elemToRemove</span><span class="o">)</span>
+        <span class="o">}</span>
+        <span class="k">else</span> <span class="o">{</span>
+          <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+        <span class="o">}</span>
+      <span class="o">}</span>
+      <span class="k">else</span> <span class="o">{</span>
+        <span class="n">removed</span> <span class="k">=</span> <span class="kc">true</span>
+        <span class="n">requester</span> <span class="o">!</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="n">id</span><span class="o">)</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>This makes removal asynchronous and much simpler however it also means that we will be accumulating nodes that have been removed which could become problematic in terms of memory.  We will deal with this by introducing a new type of message called <code>GC</code> (for <em>Garbage Collection</em>) that the main <code>BinaryTreeSet</code> actor can receive.  When this message is received, all of the nodes in the tree that haven't been removed (i.e. where <code>removed = false</code>) are copied and inserted into a new tree (with a new root node) which results in a new tree where the nodes that have been removed are <em>actually</em> removed.  Also, when the copy is completed, all of the actors in the old tree are stopped.  There will also be a <code>CopyTo</code> message which holds the root node of the new tree as a field.  This message is recursively sent to each node in the old tree and if its <code>removed</code> flag is <code>false</code> then it is inserted into the new tree. One more thing we must deal with is what to do with messages that come in while garbage collection is taking place.  We will deal with this by enqueuing these messages and then begin processing them once garbage collection has completed.</p>
+<p>So once the <code>GC</code> message is received by the <code>BinaryTreeSet</code> actor, it enters into a new context where it waits for the new tree to be copied while also enqueuing other messages that are received during this time.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">GC</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="k">val</span> <span class="n">newRoot</span> <span class="k">=</span> <span class="n">createRoot</span>
+      <span class="n">root</span> <span class="o">!</span> <span class="nc">CopyTo</span><span class="o">(</span><span class="n">newRoot</span><span class="o">)</span>
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">garbageCollecting</span><span class="o">(</span><span class="n">newRoot</span><span class="o">))</span>
+    <span class="o">}</span>
+</pre></div>
+
+
+<div class="highlight"><pre>  <span class="k">def</span> <span class="n">garbageCollecting</span><span class="o">(</span><span class="n">newRoot</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+
+    <span class="k">case</span> <span class="n">operation</span><span class="k">:</span> <span class="kt">Operation</span> <span class="o">=&gt;</span> <span class="n">pendingQueue</span><span class="o">.</span><span class="n">enqueue</span><span class="o">(</span><span class="n">operation</span><span class="o">)</span>
+
+    <span class="k">case</span> <span class="nc">CopyFinished</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="n">root</span> <span class="o">!</span> <span class="nc">PoisonPill</span>
+      <span class="k">val</span> <span class="n">newRoot</span> <span class="k">=</span> <span class="n">createRoot</span>
+      <span class="n">root</span> <span class="k">=</span> <span class="n">newRoot</span>
+
+      <span class="n">pendingQueue</span><span class="o">.</span><span class="n">map</span><span class="o">(</span><span class="n">root</span> <span class="o">!</span> <span class="k">_</span><span class="o">)</span>
+      <span class="n">pendingQueue</span> <span class="k">=</span> <span class="nc">Queue</span><span class="o">.</span><span class="n">empty</span>
+
+      <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">normal</span><span class="o">)</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>Then once it receives the <code>CopyFinished</code> message, it executes all of the messages that are in the queue and  returns to its normal context.  For the <code>BinaryTreeNode</code> actors, the <code>CopyTo</code> message is handled as follows.</p>
+<div class="highlight"><pre><span class="k">case</span> <span class="nc">CopyTo</span><span class="o">(</span><span class="n">newRoot</span><span class="o">)</span> <span class="k">=&gt;</span> <span class="o">{</span>
+      <span class="k">if</span> <span class="o">(!</span><span class="n">removed</span><span class="o">){</span>
+        <span class="n">newRoot</span> <span class="o">!</span> <span class="nc">Insert</span><span class="o">(</span><span class="n">self</span><span class="o">,</span> <span class="mi">0</span><span class="o">,</span> <span class="n">elem</span><span class="o">)</span>
+      <span class="o">}</span>
+
+      <span class="n">subtrees</span><span class="o">.</span><span class="n">values</span> <span class="n">foreach</span> <span class="o">(</span><span class="k">_</span> <span class="o">!</span> <span class="nc">CopyTo</span><span class="o">(</span><span class="n">newRoot</span><span class="o">))</span>
+
+      <span class="k">if</span> <span class="o">(</span><span class="n">removed</span> <span class="o">&amp;&amp;</span> <span class="n">subtrees</span><span class="o">.</span><span class="n">isEmpty</span><span class="o">){</span>
+        <span class="n">sender</span> <span class="o">!</span> <span class="nc">CopyFinished</span>
+      <span class="o">}</span>
+      <span class="k">else</span><span class="o">{</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">copying</span><span class="o">(</span><span class="n">subtrees</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">toSet</span><span class="o">,</span> <span class="n">insertConfirmed</span> <span class="k">=</span> <span class="n">removed</span><span class="o">,</span> <span class="n">sender</span><span class="o">))</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>i.e. if the node has not been removed, insert it into the new tree.  Alternatively, if it has been removed and it is an external node, then there is nothing left to copy and the <code>CopyFinished</code> message is sent back to the sending node.  Once a node sends the <code>CopyTo</code> message to its children, it enters a <code>copying</code> context in which it waits for each of its children to return a <code>CopyFinished</code> message, at which point the node itself returns a <code>CopyFinished</code> message to its parent until eventually the <code>BinaryTreeSet</code> actor (the actor that initially sent the <code>CopyTo</code> message) receives a <code>CopyFinished</code> message and we know that all nodes have been copied. The <code>copying</code> context is shown below.</p>
+<div class="highlight"><pre><span class="k">def</span> <span class="n">copying</span><span class="o">(</span><span class="n">expected</span><span class="k">:</span> <span class="kt">Set</span><span class="o">[</span><span class="kt">ActorRef</span><span class="o">],</span> <span class="n">insertConfirmed</span><span class="k">:</span> <span class="kt">Boolean</span><span class="o">,</span> <span class="n">originator</span><span class="k">:</span> <span class="kt">ActorRef</span><span class="o">)</span><span class="k">:</span> <span class="kt">Receive</span> <span class="o">=</span> <span class="o">{</span>
+    <span class="k">case</span> <span class="nc">OperationFinished</span><span class="o">(</span><span class="k">_</span><span class="o">)</span> <span class="k">=&gt;</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">expected</span><span class="o">.</span><span class="n">isEmpty</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">originator</span> <span class="o">!</span> <span class="nc">CopyFinished</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">normal</span><span class="o">)</span>
+      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">copying</span><span class="o">(</span><span class="n">expected</span><span class="o">,</span> <span class="n">insertConfirmed</span> <span class="k">=</span> <span class="kc">true</span><span class="o">,</span> <span class="n">originator</span><span class="o">))</span>
+      <span class="o">}</span>
+    <span class="k">case</span> <span class="nc">CopyFinished</span> <span class="k">=&gt;</span>
+      <span class="k">val</span> <span class="n">newExpected</span> <span class="k">=</span> <span class="n">expected</span> <span class="o">-</span> <span class="n">sender</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">newExpected</span><span class="o">.</span><span class="n">isEmpty</span> <span class="o">&amp;&amp;</span> <span class="n">insertConfirmed</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">originator</span> <span class="o">!</span> <span class="nc">CopyFinished</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">normal</span><span class="o">)</span>
+      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">become</span><span class="o">(</span><span class="n">copying</span><span class="o">(</span><span class="n">newExpected</span><span class="o">,</span> <span class="n">insertConfirmed</span><span class="o">,</span> <span class="n">originator</span><span class="o">))</span>
+      <span class="o">}</span>
+<span class="o">}</span>
+</pre></div>
+
+
+<p>And that is the basic functionality of the distributed binary search tree.  The full code is available on <a href="https://github.com/alexminnaar/ActorBinaryTree">this github repo</a>.  Hopefully this blog post has shed some light on the Akka actor model and how it can be used to build concurrent, distributed applications like this one.</p>
+<h2>References</h2>
+<ul>
+<li><a href="http://akka.io/">The Akka Homepage</a></li>
+<li><a href="https://www.coursera.org/course/reactive">Principles of Reactive Programming Coursera Course</a></li>
+<li><a href="https://github.com/alexminnaar/ActorBinaryTree">GitHub repository</a> for the code used in this post.</li>
+</ul>
+                    </article>
  
 <div class="paginator">
-    <div class="navButton">Page 1 / 5</div>
+    <div class="navButton">Page 1 / 4</div>
         <div class="navButton"><a href="/index2.html" >Next</a></div>
 </div>
                 </div>
